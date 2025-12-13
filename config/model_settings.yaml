@@ -1,0 +1,121 @@
+# 人間クライアント × カウンセラーボット
+human_client_counselor:
+  api: responses
+  model: gpt-5-nano
+  reasoning_effort: low
+  verbosity: low
+  json_mode: auto
+  temperature_policy: auto
+  system_handling: as_input
+
+# 自己対話シミュレーションのカウンセラーLLM
+self_play_counselor:
+  api: responses
+  model: gpt-5-nano
+  reasoning_effort: low
+  verbosity: low
+  json_mode: auto
+  temperature_policy: auto
+  system_handling: as_input
+
+# 自己対話シミュレーションのクライアントLLM
+self_play_client:
+  api: responses
+  model: gpt-5-nano
+  reasoning_effort: low
+  verbosity: low
+  json_mode: auto
+  temperature_policy: auto
+  system_handling: as_input
+
+# 自己対話シミュレーションのクライアント内部状態更新LLM
+self_play_client_state:
+  api: responses
+  model: gpt-5-nano
+  reasoning_effort: low
+  verbosity: low
+  json_mode: auto
+  temperature_policy: auto
+  system_handling: as_input
+
+# 自己対話シミュレーションのクライアント応答生成LLM
+self_play_client_reply:
+  api: responses
+  model: gpt-5-nano
+  reasoning_effort: low
+  verbosity: low
+  json_mode: auto
+  temperature_policy: auto
+  system_handling: as_input
+
+# 人間カウンセラー × クライアントボットでのフェーズ判定LLM
+human_counselor_phase_classifier:
+  api: responses
+  model: gpt-5-nano
+  reasoning_effort: low
+  verbosity: low
+  json_mode: auto
+  temperature_policy: auto
+  system_handling: as_input
+
+# 人間カウンセラー × クライアントボットでの行動ラベル判定LLM
+human_counselor_action_classifier:
+  api: responses
+  model: gpt-5-nano
+  reasoning_effort: low
+  verbosity: low
+  json_mode: auto
+  temperature_policy: auto
+  system_handling: as_input
+
+# 人間カウンセラー × クライアントボットのクライアント生成・内部状態更新LLM
+human_counselor_client:
+  api: responses
+  model: gpt-5-mini
+  reasoning_effort: medium
+  verbosity: low
+  json_mode: auto
+  temperature_policy: auto
+  system_handling: as_input
+
+# 人間カウンセラー × クライアントボットの内部状態更新LLM
+human_counselor_client_state:
+  api: responses
+  model: gpt-5-mini
+  reasoning_effort: medium
+  verbosity: low
+  json_mode: auto
+  temperature_policy: auto
+  system_handling: as_input
+
+# 人間カウンセラー × クライアントボットの応答生成LLM
+human_counselor_client_reply:
+  api: responses
+  model: gpt-5-mini
+  reasoning_effort: medium
+  verbosity: low
+  json_mode: auto
+  temperature_policy: auto
+  system_handling: as_input
+
+# カウンセラーボット内部のフェーズ判定LLM（有効化は enabled: true）
+counselor_phase_classifier:
+  api: responses
+  model: gpt-5-nano
+  reasoning_effort: low
+  verbosity: low
+  json_mode: auto
+  temperature_policy: auto
+  system_handling: as_input
+  enabled: true
+
+# カウンセラーボット内部の行動順位付けLLM（有効化は enabled: true）
+counselor_action_ranker:
+  api: responses
+  model: gpt-5-nano
+  reasoning_effort: low
+  verbosity: low
+  json_mode: auto
+  temperature_policy: auto
+  system_handling: as_input
+  enabled: true
