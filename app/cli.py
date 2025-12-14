@@ -4,6 +4,8 @@ import argparse
 import os
 import subprocess
 from dataclasses import asdict
+from pathlib import Path
+import site
 from typing import Any, Dict, Optional
 
 from conversation_environment import ConversationEnvironment, ConversationTurn
@@ -75,6 +77,94 @@ def _format_evaluation_debug(debug: Dict[str, Any]) -> str:
 # conda 環境チェック（人間クライアント CLI 用）
 # ==============================
 
+def _find_python_venv_candidates(env_name: str) -> list[Path]:
+    """conda が無い場合に使えそうな Python 仮想環境パス候補を列挙する。"""
+    name = env_name or "py-dspy"
+    root = Path(__file__).resolve().parent.parent
+    cwd = Path.cwd()
+    home = Path.home()
+    candidates = [
+        root / ".venv" / name,
+        root / ".venv",
+        cwd / ".venv" / name,
+        cwd / ".venv",
+        home / ".venv" / name,
+        home / "venv" / name,
+    ]
+    seen = set()
+    found: list[Path] = []
+    for p in candidates:
+        key = str(p.resolve())
+        if key in seen:
+            continue
+        seen.add(key)
+        bin_dir = p / ("Scripts" if os.name == "nt" else "bin")
+        python_bin = bin_dir / ("python.exe" if os.name == "nt" else "python")
+        if python_bin.exists():
+            found.append(p)
+    return found
+
+
+def _detect_site_packages(venv_path: Path) -> Optional[Path]:
+    """仮想環境配下の site-packages を推定する（Unix/Windows 両対応）。"""
+    lib_dir = venv_path / "lib"
+    if lib_dir.is_dir():
+        for child in sorted(lib_dir.iterdir()):
+            if child.is_dir() and child.name.startswith("python"):
+                sp = child / "site-packages"
+                if sp.is_dir():
+                    return sp
+    win_sp = venv_path / "Lib" / "site-packages"
+    if win_sp.is_dir():
+        return win_sp
+    return None
+
+
+def _activate_python_venv(venv_path: Path) -> bool:
+    """
+    conda が無い場合のフォールバックとして、Python 仮想環境を「擬似アクティベート」する。
+    - PATH 先頭に venv/bin を追加
+    - VIRTUAL_ENV をセット
+    - site-packages を sys.path に追加
+    """
+    try:
+        bin_dir = venv_path / ("Scripts" if os.name == "nt" else "bin")
+        python_bin = bin_dir / ("python.exe" if os.name == "nt" else "python")
+        if not python_bin.exists():
+            return False
+
+        site_packages = _detect_site_packages(venv_path)
+        if site_packages and site_packages.exists():
+            site.addsitedir(str(site_packages))
+
+        os.environ["VIRTUAL_ENV"] = str(venv_path)
+        old_path = os.environ.get("PATH", "")
+        if str(bin_dir) not in old_path.split(os.pathsep):
+            os.environ["PATH"] = str(bin_dir) + os.pathsep + old_path
+
+        print(
+            f"✅ conda環境が見つからなかったため、Python仮想環境 '{venv_path}' を利用するように設定しました。"
+        )
+        return True
+    except Exception as e:
+        print(f"⚠️  Python仮想環境の設定に失敗しました: {e}")
+        return False
+
+
+def _maybe_activate_python_venv(env_name: str) -> bool:
+    """conda が使えない場合に、同名の Python venv を探して設定する。"""
+    candidates = _find_python_venv_candidates(env_name)
+    for p in candidates:
+        if _activate_python_venv(p):
+            return True
+    if candidates:
+        print("⚠️  Python仮想環境は見つかったものの、設定に失敗しました。")
+    else:
+        print("⚠️  conda 環境と Python 仮想環境（.venv）どちらも見つかりませんでした。")
+        print("   必要なら '--conda-env \"\"' でチェックをスキップし、手動で環境を有効化してください。")
+    return False
+
+
 def activate_conda_env(env_name: str = "py-dspy") -> bool:
     """conda 環境をアクティベートする（失敗しても続行）。"""
     current_env = os.environ.get("CONDA_DEFAULT_ENV", "")
@@ -113,16 +203,16 @@ def activate_conda_env(env_name: str = "py-dspy") -> bool:
                 )
                 return True
             print(f"❌ エラー: conda環境 '{env_name}' が見つかりません。")
-            return False
+            return _maybe_activate_python_venv(env_name)
         print("⚠️  警告: conda環境のアクティベートに失敗しました。")
         print(f"   手動で 'conda activate {env_name}' を実行してください。")
-        return False
+        return _maybe_activate_python_venv(env_name)
     except subprocess.CalledProcessError as e:
         print(f"❌ エラー: condaコマンドの実行に失敗しました: {e}")
-        return False
+        return _maybe_activate_python_venv(env_name)
     except FileNotFoundError:
         print("❌ エラー: condaがインストールされていません。")
-        return False
+        return _maybe_activate_python_venv(env_name)
 
 
 def check_and_activate_conda_env(env_name: str = "py-dspy") -> None:
