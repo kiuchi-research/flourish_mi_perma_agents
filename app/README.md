@@ -75,6 +75,12 @@ app/
 - `DsPy/train_a_generation.py` / `train_b_estimators.py` / `train_c_session.py` で順に 発話生成 → フェーズ/行動推定 → セッション最適化 を実行（入力は `app/logs/*.csv`）。  
 - データ/メトリクスは `DsPy/mi_dspy_data.py`・`DsPy/mi_dspy_metrics.py` を参照。コンパイル結果は `compiled/` に保存。
 
+### クイック実行の目安
+- `python app/human_client_counselor_cli.py` : カウンセラーボット × 人間クライアントで対話。  
+- `python app/human_counselor_client_cli.py` : 人間カウンセラー × クライアントボットで対話（自動ラベル付け）。  
+- `python app/agent_dual_simulation.py` : エージェント同士の自己対話（既定5ターン）。  
+いずれも `.env` に `OPENAI_API_KEY` が必要で、セッション終了後に `app/logs/` へログが保存されます。`conda` の `py-dspy` もしくは同名の Python 仮想環境を自動で有効化しようとするため、事前に `environment.yml` または `requirements.txt` で準備しておくと確実です。
+
 ## ログ保存と解析（session_log_tools.py）
 
 - `finalize_session(env, llm, log_prefix=...)` は CSV とクライアント評価 JSON をまとめて保存（`app/logs/`）。  
