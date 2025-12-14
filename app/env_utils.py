@@ -13,8 +13,8 @@ DEFAULT_MODEL_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / 
 
 # mode ごとの組み込みデフォルト
 DEFAULT_MODEL_CONFIG: Dict[str, Dict[str, Any]] = {
-    # ---- LLMエージェント生成（人間クライアント向け） ----
-    "human_client_counselor": {
+    # ---- カウンセラー（共通） ----
+    "counselor_llm": {
         "api": "responses",
         "model": "gpt-5-nano",
         "reasoning_effort": "low",
@@ -23,91 +23,7 @@ DEFAULT_MODEL_CONFIG: Dict[str, Dict[str, Any]] = {
         "temperature_policy": "auto",
         "system_handling": "as_input",
     },
-    # ---- LLMエージェント生成（自己対話シミュレーション） ----
-    "self_play_counselor": {
-        "api": "responses",
-        "model": "gpt-5-nano",
-        "reasoning_effort": "low",
-        "verbosity": "low",
-        "json_mode": "auto",
-        "temperature_policy": "auto",
-        "system_handling": "as_input",
-    },
-    "self_play_client": {
-        "api": "responses",
-        "model": "gpt-5-nano",
-        "reasoning_effort": "low",
-        "verbosity": "low",
-        "json_mode": "auto",
-        "temperature_policy": "auto",
-        "system_handling": "as_input",
-    },
-    "self_play_client_state": {
-        "api": "responses",
-        "model": "gpt-5-nano",
-        "reasoning_effort": "low",
-        "verbosity": "low",
-        "json_mode": "auto",
-        "temperature_policy": "auto",
-        "system_handling": "as_input",
-    },
-    "self_play_client_reply": {
-        "api": "responses",
-        "model": "gpt-5-nano",
-        "reasoning_effort": "low",
-        "verbosity": "low",
-        "json_mode": "auto",
-        "temperature_policy": "auto",
-        "system_handling": "as_input",
-    },
-    # ---- 人間カウンセラー × LLMクライアント ----
-    "human_counselor_phase_classifier": {
-        "api": "responses",
-        "model": "gpt-5-nano",
-        "reasoning_effort": "low",
-        "verbosity": "low",
-        "json_mode": "auto",
-        "temperature_policy": "auto",
-        "system_handling": "as_input",
-    },
-    "human_counselor_action_classifier": {
-        "api": "responses",
-        "model": "gpt-5-nano",
-        "reasoning_effort": "low",
-        "verbosity": "low",
-        "json_mode": "auto",
-        "temperature_policy": "auto",
-        "system_handling": "as_input",
-    },
-    "human_counselor_client": {
-        "api": "responses",
-        "model": "gpt-5-mini",
-        "reasoning_effort": "medium",
-        "verbosity": "low",
-        "json_mode": "auto",
-        "temperature_policy": "auto",
-        "system_handling": "as_input",
-    },
-    "human_counselor_client_state": {
-        "api": "responses",
-        "model": "gpt-5-mini",
-        "reasoning_effort": "medium",
-        "verbosity": "low",
-        "json_mode": "auto",
-        "temperature_policy": "auto",
-        "system_handling": "as_input",
-    },
-    "human_counselor_client_reply": {
-        "api": "responses",
-        "model": "gpt-5-mini",
-        "reasoning_effort": "medium",
-        "verbosity": "low",
-        "json_mode": "auto",
-        "temperature_policy": "auto",
-        "system_handling": "as_input",
-    },
-    # ---- カウンセラーエージェントの補助（任意で有効化） ----
-    "counselor_phase_classifier": {
+    "counselor_phase": {
         "api": "responses",
         "model": "gpt-5-nano",
         "reasoning_effort": "low",
@@ -117,7 +33,7 @@ DEFAULT_MODEL_CONFIG: Dict[str, Dict[str, Any]] = {
         "system_handling": "as_input",
         "enabled": True,
     },
-    "counselor_action_ranker": {
+    "counselor_action": {
         "api": "responses",
         "model": "gpt-5-nano",
         "reasoning_effort": "low",
@@ -126,6 +42,61 @@ DEFAULT_MODEL_CONFIG: Dict[str, Dict[str, Any]] = {
         "temperature_policy": "auto",
         "system_handling": "as_input",
         "enabled": True,
+    },
+    # ---- クライアント（共通） ----
+    "client_profile_llm": {
+        "api": "responses",
+        "model": "gpt-5-nano",
+        "reasoning_effort": "low",
+        "verbosity": "low",
+        "json_mode": "auto",
+        "temperature_policy": "auto",
+        "system_handling": "as_input",
+    },
+    "client_state_llm": {
+        "api": "responses",
+        "model": "gpt-5-nano",
+        "reasoning_effort": "low",
+        "verbosity": "low",
+        "json_mode": "auto",
+        "temperature_policy": "auto",
+        "system_handling": "as_input",
+    },
+    "client_reply_llm": {
+        "api": "responses",
+        "model": "gpt-5-nano",
+        "reasoning_effort": "low",
+        "verbosity": "low",
+        "json_mode": "never",
+        "temperature_policy": "auto",
+        "system_handling": "as_input",
+    },
+    # ---- 安全判定・応答評価（任意で有効化） ----
+    # ---- 安全判定・応答評価（任意で有効化） ----
+    "counselor_risk_detector": {
+        "api": "responses",
+        "model": "gpt-5-nano",
+        "reasoning_effort": "low",
+        "verbosity": "low",
+        "json_mode": "auto",
+        "temperature_policy": "auto",
+        "system_handling": "as_input",
+        "enabled": False,
+        "temperature": 0.0,
+        "max_history_turns": 8,
+    },
+    "counselor_mi_evaluator": {
+        "api": "responses",
+        "model": "gpt-5-nano",
+        "reasoning_effort": "low",
+        "verbosity": "low",
+        "json_mode": "auto",
+        "temperature_policy": "auto",
+        "system_handling": "as_input",
+        "enabled": False,
+        "temperature": 0.0,
+        "max_history_turns": 6,
+        "rewrite_threshold": None,
     },
 }
 

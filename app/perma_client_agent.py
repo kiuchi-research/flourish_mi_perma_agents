@@ -10,13 +10,473 @@ from __future__ import annotations
 の両方で共通に使えます。
 """
 
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Protocol, Literal, Optional, Tuple
 import json
-import re
 import math
+import os
+import re
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Literal, Optional, Protocol, Tuple
+
+import yaml
 
 from mi_counselor_agent import LLMClient
+
+
+DEFAULT_FIRST_CLIENT_UTTERANCE = "相談させてください。"
+
+
+# ==============================
+# client_profiles.yaml ローダー（SimpleClientLLM用に統合）
+# ==============================
+
+
+@dataclass
+class ClientProfileBundle:
+    profile: Dict[str, Any]
+    derived_meta: Dict[str, str]
+    scenario: str
+    style: str
+    first_utterance: str
+    max_state_step: Optional[float]
+    profiles_path: Path
+    clients_cfg: Dict[str, Any]
+    first_utterance_mode: str = "profile"
+    first_utterance_debug: Optional[Dict[str, Any]] = None
+
+
+def _safe_str(x: Any) -> str:
+    if x is None:
+        return ""
+    return str(x).strip()
+
+
+def _find_client_profiles_path() -> Path:
+    env_path = (
+        os.getenv("CLIENT_PROFILES_PATH")
+        or os.getenv("CLIENTS_YAML_PATH")
+        or os.getenv("CLIENTS_YAML")
+    )
+    if env_path:
+        p = Path(env_path).expanduser().resolve()
+        if p.is_file():
+            return p
+        raise FileNotFoundError(f"client_profiles.yaml が見つかりません（環境変数指定）: {p}")
+
+    candidates = [
+        Path(__file__).resolve().parent / "client_profiles.yaml",
+        Path(__file__).resolve().parent.parent / "client_profiles.yaml",
+        Path.cwd() / "client_profiles.yaml",
+        Path(__file__).resolve().parent / "clients.yaml",
+        Path(__file__).resolve().parent.parent / "clients.yaml",
+        Path.cwd() / "clients.yaml",
+    ]
+
+    for p in candidates:
+        if p.is_file():
+            return p
+
+    tried = "\n".join([f"- {c}" for c in candidates])
+    raise FileNotFoundError(
+        "client_profiles.yaml が見つかりません。次の場所を探しました:\n"
+        + tried
+        + "\n\n必要なら、CLIENT_PROFILES_PATH=/path/to/client_profiles.yaml を指定してください。"
+    )
+
+
+def _load_client_profiles_yaml(path: Path) -> Dict[str, Any]:
+    with open(path, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    return data if isinstance(data, dict) else {}
+
+
+def _get_client_profile(cfg: Dict[str, Any], client_code: str) -> Dict[str, Any]:
+    clients = cfg.get("clients")
+    if not isinstance(clients, dict):
+        raise KeyError("client_profiles.yaml に 'clients' セクションがありません。")
+
+    code = (client_code or "").strip()
+    if code not in clients:
+        available = ", ".join(sorted([str(k) for k in clients.keys()]))
+        raise KeyError(f"client_profiles.yaml に client_code={code} がありません。利用可能: {available}")
+
+    profile = clients.get(code)
+    if not isinstance(profile, dict):
+        raise TypeError(f"client_profiles.yaml の clients.{code} が dict ではありません。")
+    return profile
+
+
+def _derive_client_meta(profile: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, str]:
+    defs = cfg.get("definitions")
+    defs = defs if isinstance(defs, dict) else {}
+
+    perma_defs = defs.get("perma")
+    perma_defs = perma_defs if isinstance(perma_defs, dict) else {}
+
+    style_defs = defs.get("interpersonal_styles")
+    style_defs = style_defs if isinstance(style_defs, dict) else {}
+
+    pattern_defs = defs.get("perma_focus_patterns")
+    pattern_defs = pattern_defs if isinstance(pattern_defs, dict) else {}
+
+    pattern_code = _safe_str(profile.get("pattern"))
+    pattern_info = pattern_defs.get(pattern_code)
+    pattern_info = pattern_info if isinstance(pattern_info, dict) else {}
+    pattern_label = _safe_str(pattern_info.get("label")) or pattern_code
+
+    primary_focus_code = _safe_str(pattern_info.get("primary_focus"))
+    primary_focus_label = _safe_str(perma_defs.get(primary_focus_code)) or primary_focus_code
+
+    interpersonal_style_code = _safe_str(profile.get("interpersonal_style"))
+    style_info = style_defs.get(interpersonal_style_code)
+    style_info = style_info if isinstance(style_info, dict) else {}
+    interpersonal_label = _safe_str(style_info.get("label")) or interpersonal_style_code
+    interpersonal_brief = _safe_str(style_info.get("brief"))
+
+    return {
+        "pattern_code": pattern_code,
+        "pattern_label": pattern_label,
+        "primary_focus_code": primary_focus_code,
+        "primary_focus_label": primary_focus_label,
+        "interpersonal_style_code": interpersonal_style_code,
+        "interpersonal_style_label": interpersonal_label,
+        "interpersonal_style_brief": interpersonal_brief,
+    }
+
+
+def _resolve_client_llm_style(*, env_style: str, interpersonal_style_code: str) -> str:
+    s = (env_style or "auto").strip().lower()
+    if s in ("cooperative", "ambivalent", "resistant"):
+        return s
+
+    code = (interpersonal_style_code or "").strip()
+    mapping = {
+        "S1": "cooperative",
+        "S2": "resistant",
+        "S3": "cooperative",
+    }
+    return mapping.get(code, "cooperative")
+
+
+def _format_perma_baseline(baseline_perma: Any, cfg: Dict[str, Any]) -> List[str]:
+    defs = cfg.get("definitions")
+    defs = defs if isinstance(defs, dict) else {}
+    perma_defs = defs.get("perma")
+    perma_defs = perma_defs if isinstance(perma_defs, dict) else {}
+
+    if not isinstance(baseline_perma, dict):
+        return []
+
+    lines: List[str] = []
+    order = ["P", "E", "R", "M", "A"]
+
+    for k in order:
+        if k not in baseline_perma:
+            continue
+        name = _safe_str(perma_defs.get(k)) or k
+        try:
+            v = float(baseline_perma.get(k))
+            if abs(v - int(v)) < 1e-9:
+                v_str = str(int(v))
+            else:
+                v_str = str(v)
+        except Exception:
+            v_str = _safe_str(baseline_perma.get(k))
+        lines.append(f"- {name} [{k}]: {v_str}")
+
+    for k, v in baseline_perma.items():
+        if str(k) in order:
+            continue
+        name = _safe_str(perma_defs.get(str(k))) or str(k)
+        lines.append(f"- {name} [{k}]: {v}")
+
+    return lines
+
+
+def _format_trait_expression(trait_expression: Any) -> List[str]:
+    if not isinstance(trait_expression, dict):
+        return []
+
+    desc = {-1: "出にくい", 0: "標準", 1: "出やすい"}
+    label_map = {
+        "trait_expression_pos": "pos_affect（ポジティブ感情）",
+        "trait_expression_neg": "neg_affect（ネガティブ感情）",
+        "trait_expression_importance": "importance_change（重要度）",
+        "trait_expression_confidence": "confidence_change（自信）",
+        "trait_expression_like": "like_counselor（好感）",
+        "trait_expression_tension": "tension_counselor（緊張/不和）",
+    }
+
+    order = list(label_map.keys())
+    lines: List[str] = []
+
+    for k in order:
+        if k not in trait_expression:
+            continue
+        try:
+            v = float(trait_expression.get(k))
+        except Exception:
+            v = 0.0
+
+        if v <= -0.5:
+            vi = -1
+        elif v >= 0.5:
+            vi = 1
+        else:
+            vi = 0
+
+        label = label_map.get(k, k)
+        lines.append(f"- {label}: {vi}（{desc.get(vi, '標準')}）")
+
+    return lines
+
+
+def _build_client_scenario_text(
+    client_code: str,
+    profile: Dict[str, Any],
+    cfg: Dict[str, Any],
+    meta: Dict[str, str],
+) -> str:
+    lines: List[str] = []
+    lines.append("【クライアント設定】")
+    lines.append(f"- client_code: {client_code}")
+
+    pattern_code = meta.get("pattern_code", "")
+    pattern_label = meta.get("pattern_label", "")
+    pf_code = meta.get("primary_focus_code", "")
+    pf_label = meta.get("primary_focus_label", "")
+
+    if pattern_code:
+        if pf_code and pf_label:
+            lines.append(f"- pattern: {pattern_code}（{pattern_label}） / primary_focus: {pf_code}（{pf_label}）")
+        else:
+            lines.append(f"- pattern: {pattern_code}（{pattern_label}）")
+
+    is_code = meta.get("interpersonal_style_code", "")
+    is_label = meta.get("interpersonal_style_label", "")
+    is_brief = meta.get("interpersonal_style_brief", "")
+    if is_code:
+        if is_brief:
+            lines.append(f"- interpersonal_style: {is_code}（{is_label}）: {is_brief}")
+        else:
+            lines.append(f"- interpersonal_style: {is_code}（{is_label}）")
+
+    bg = profile.get("background")
+    bg = bg if isinstance(bg, dict) else {}
+    bg_lines: List[str] = []
+    age = _safe_str(bg.get("age_range"))
+    occ = _safe_str(bg.get("occupation_context"))
+    living = _safe_str(bg.get("living_situation"))
+    notes = _safe_str(bg.get("notes"))
+    if age:
+        bg_lines.append(f"- 年代: {age}")
+    if occ:
+        bg_lines.append(f"- 仕事文脈: {occ}")
+    if living:
+        bg_lines.append(f"- 生活状況: {living}")
+    if notes:
+        bg_lines.append(f"- 補足: {notes}")
+    if bg_lines:
+        lines.append("")
+        lines.append("【背景】")
+        lines.extend(bg_lines)
+
+    pc = _safe_str(profile.get("presenting_concern"))
+    if pc:
+        lines.append("")
+        lines.append("【主訴】")
+        lines.append(pc)
+
+    baseline_perma = profile.get("baseline_perma")
+    perma_lines = _format_perma_baseline(baseline_perma, cfg)
+    if perma_lines:
+        lines.append("")
+        lines.append("【事前PERMA想定（0〜10）】")
+        lines.extend(perma_lines)
+
+    strengths = profile.get("strengths_resources")
+    if isinstance(strengths, list) and strengths:
+        lines.append("")
+        lines.append("【強み/資源】")
+        for s in strengths:
+            st = _safe_str(s)
+            if st:
+                lines.append(f"- {st}")
+
+    mc = _safe_str(profile.get("maintaining_cycle"))
+    if mc:
+        lines.append("")
+        lines.append("【維持サイクル】")
+        lines.append(mc)
+
+    sg = _safe_str(profile.get("session_goal"))
+    if sg:
+        lines.append("")
+        lines.append("【このセッションの目標】")
+        lines.append(sg)
+
+    safety = profile.get("safety")
+    safety = safety if isinstance(safety, dict) else {}
+    if safety:
+        lines.append("")
+        lines.append("【安全性】")
+        ac = safety.get("acute_crisis")
+        si = safety.get("suicidal_ideation")
+        if ac is not None:
+            lines.append(f"- acute_crisis: {bool(ac)}")
+        if si is not None:
+            lines.append(f"- suicidal_ideation: {bool(si)}")
+
+    te = profile.get("trait_expression")
+    te_lines = _format_trait_expression(te)
+    if te_lines:
+        lines.append("")
+        lines.append("【発話としての出やすさ特性（-1/0/+1）】")
+        lines.extend(te_lines)
+
+    return "\n".join(lines).strip()
+
+
+def _apply_trait_expression_to_client(client: Any, profile: Dict[str, Any]) -> None:
+    te = profile.get("trait_expression")
+    if not isinstance(te, dict):
+        return
+
+    internal_state = getattr(client, "internal_state", None)
+    if internal_state is None:
+        return
+
+    for k, v in te.items():
+        if not hasattr(internal_state, str(k)):
+            continue
+        try:
+            setattr(internal_state, str(k), float(v))
+        except Exception:
+            continue
+
+
+def _parse_max_state_step(env_value: str) -> Optional[float]:
+    try:
+        return float(env_value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _choose_first_client_utterance(
+    profile: Dict[str, Any],
+    first_client_utterance_env: Optional[str],
+    default_first_utterance: str,
+) -> str:
+    """
+    初期発話は、環境変数 > プロファイル独自フィールド(first_utterance) > 既定値 の順で決める。
+    presenting_concern は「主訴の説明」であり、初回発話としては使わない。
+    """
+    if first_client_utterance_env:
+        return first_client_utterance_env
+
+    profile_first = _safe_str(profile.get("first_utterance"))
+    if profile_first:
+        return profile_first
+
+    return default_first_utterance
+
+
+def _postprocess_first_utterance_text(text: str) -> str:
+    """
+    LLMが返した初期発話を1行のテキストに整形する。
+    - 空行を除去し、最初の行のみ採用
+    - 先頭/末尾の引用符や括弧をトリム
+    """
+    lines = [ln.strip() for ln in str(text).splitlines() if ln and ln.strip()]
+    if not lines:
+        return ""
+    t = lines[0]
+    t = t.strip("「」『』\"'（）()[]{} ")
+    return t.strip()
+
+
+def _maybe_generate_first_utterance_with_llm(
+    bundle: ClientProfileBundle,
+    llm: LLMClient,
+) -> Tuple[str, Dict[str, Any]]:
+    """
+    初期発話は常に LLM で生成する（環境変数 FIRST_CLIENT_UTTERANCE があればそちらを優先）。
+    """
+    explicit_env = os.getenv("FIRST_CLIENT_UTTERANCE")
+    if explicit_env:
+        return explicit_env, {"mode": "env"}
+
+    temperature = 0.7
+    try:
+        t_env = os.getenv("FIRST_CLIENT_UTTERANCE_TEMPERATURE")
+        if t_env:
+            temperature = float(t_env)
+    except Exception:
+        pass
+
+    presenting = _safe_str(bundle.profile.get("presenting_concern"))
+
+    system = (
+        "あなたは相談のクライアントです。次の設定に沿って、初回にカウンセラーへ伝える"
+        "自然な1〜2文だけを日本語で返してください。短く端的に、困りごとや今の気持ちを"
+        "述べてください。箇条書きや説明文は書かないでください。"
+    )
+    user = (
+        f"{bundle.scenario}\n"
+        + (f"\n【主訴の要点】{presenting}\n" if presenting else "\n")
+        + "上記を踏まえ、初回にカウンセラーへ伝える自然な1〜2文だけを返してください。"
+    )
+
+    try:
+        raw = llm.generate(
+            [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            temperature=temperature,
+        )
+        candidate = _postprocess_first_utterance_text(raw)
+    except Exception as e:
+        return bundle.first_utterance, {"mode": "llm", "error": str(e)}
+
+    if candidate:
+        return candidate, {"mode": "llm", "temperature": temperature, "raw": str(raw)}
+
+    return bundle.first_utterance, {"mode": "llm", "raw": str(raw), "fallback": "empty"}
+
+
+def _load_client_profile_bundle(
+    client_code: str,
+    *,
+    env_style: str = "auto",
+    first_client_utterance_env: Optional[str] = None,
+    max_state_step_env: str = "none",
+    profiles_path: Optional[Path] = None,
+    default_first_utterance: str = DEFAULT_FIRST_CLIENT_UTTERANCE,
+) -> ClientProfileBundle:
+    path = profiles_path or _find_client_profiles_path()
+    clients_cfg = _load_client_profiles_yaml(path)
+    profile = _get_client_profile(clients_cfg, client_code)
+    derived_meta = _derive_client_meta(profile, clients_cfg)
+    scenario = _build_client_scenario_text(client_code, profile, clients_cfg, derived_meta)
+    style = _resolve_client_llm_style(
+        env_style=env_style,
+        interpersonal_style_code=_safe_str(profile.get("interpersonal_style")),
+    )
+    max_state_step = _parse_max_state_step(max_state_step_env)
+    first_utterance = _choose_first_client_utterance(
+        profile,
+        first_client_utterance_env=first_client_utterance_env,
+        default_first_utterance=default_first_utterance,
+    )
+
+    return ClientProfileBundle(
+        profile=profile,
+        derived_meta=derived_meta,
+        scenario=scenario,
+        style=style,
+        first_utterance=first_utterance,
+        max_state_step=max_state_step,
+        profiles_path=path,
+        clients_cfg=clients_cfg,
+    )
 
 
 class ClientAgent(Protocol):
@@ -257,6 +717,50 @@ class SimpleClientLLM(ClientAgent):
             self.llm_state = self.llm
         if self.llm_reply is None:
             self.llm_reply = self.llm
+
+    @classmethod
+    def from_profile(
+        cls,
+        *,
+        client_code: str,
+        llm: LLMClient,
+        llm_state: Optional[LLMClient] = None,
+        llm_reply: Optional[LLMClient] = None,
+        env_style: str = "auto",
+        first_client_utterance_env: Optional[str] = None,
+        max_state_step_env: str = "none",
+        default_first_utterance: str = DEFAULT_FIRST_CLIENT_UTTERANCE,
+        profiles_path: Optional[Path] = None,
+        **kwargs: Any,
+    ) -> Tuple["SimpleClientLLM", ClientProfileBundle]:
+        """
+        client_profiles.yaml からクライアント設定を読み込み、SimpleClientLLM とメタ情報を返す。
+        """
+        bundle = _load_client_profile_bundle(
+            client_code=client_code,
+            env_style=env_style,
+            first_client_utterance_env=first_client_utterance_env,
+            max_state_step_env=max_state_step_env,
+            profiles_path=profiles_path,
+            default_first_utterance=default_first_utterance,
+        )
+
+        primary_llm = llm_reply or llm
+        generated_first, first_meta = _maybe_generate_first_utterance_with_llm(bundle, llm=primary_llm)
+        bundle.first_utterance = generated_first
+        bundle.first_utterance_mode = first_meta.get("mode", "llm")
+        bundle.first_utterance_debug = first_meta
+        client = cls(
+            llm=primary_llm,
+            llm_state=llm_state or llm,
+            llm_reply=llm_reply or llm,
+            style=bundle.style,
+            scenario=bundle.scenario,
+            max_state_step=bundle.max_state_step,
+            **kwargs,
+        )
+        _apply_trait_expression_to_client(client, bundle.profile)
+        return client, bundle
 
     def reset(self) -> None:
         """
@@ -574,12 +1078,40 @@ class SimpleClientLLM(ClientAgent):
         except (TypeError, ValueError):
             raw_reply = self.llm_reply.generate(reply_messages, temperature=float(self.temperature))
 
-        reply = str(raw_reply).strip()
+        raw_reply_str = str(raw_reply)
+        reply = self._extract_reply_text(raw_reply_str)
+        raw_reply_all = [raw_reply_str]
+        if not reply:
+            repair_messages = list(reply_messages)
+            repair_messages.append(
+                {
+                    "role": "system",
+                    "content": (
+                        "直前の出力が空か、JSON/オブジェクトだけでした。"
+                        "クライアントとして1〜3文の自然なテキストのみを返してください。"
+                        "箇条書きは可ですが、{} や []、キー名だけのJSONは禁止です。"
+                    ),
+                }
+            )
+            try:
+                raw_reply_retry = self.llm_reply.generate(
+                    repair_messages,
+                    temperature=float(self.temperature),
+                    seed=None if self.seed is None else int(self.seed),
+                )
+            except (TypeError, ValueError):
+                raw_reply_retry = self.llm_reply.generate(repair_messages, temperature=float(self.temperature))
+            raw_reply_retry_str = str(raw_reply_retry)
+            raw_reply_all.append(raw_reply_retry_str)
+            reply = self._extract_reply_text(raw_reply_retry_str)
+
+        if not reply:
+            raise ValueError(f"llm_reply returned empty or invalid text: {raw_reply_all}")
 
         # デバッグ情報を保持
         self._last_debug_info = {
             "raw_state": str(raw_state),
-            "raw_reply": str(raw_reply),
+            "raw_reply": raw_reply_all,
             "reply": reply,
             "old_state": old_state_full,
             "new_state": self.internal_state.to_full_dict(),
@@ -588,6 +1120,42 @@ class SimpleClientLLM(ClientAgent):
         }
 
         return reply
+
+    def _extract_reply_text(self, raw: str) -> Optional[str]:
+        """
+        llm_reply が JSON 形式（例: {"text": "..."}）で返した場合に text フィールドを取り出す。
+        空のオブジェクト {} のときは None を返す。
+        """
+        t = (raw or "").strip()
+        if not t:
+            return None
+        # JSONらしきときだけパースを試みる（非JSONならそのまま返す）
+        if t.startswith("{") or t.startswith("["):
+            try:
+                data = json.loads(t)
+            except Exception:
+                return None
+            if isinstance(data, dict):
+                if not data:
+                    return None
+                if "text" in data:
+                    val = data.get("text")
+                    return str(val) if val is not None else ""
+                # よくあるエイリアス
+                for key in ("reply", "content", "message"):
+                    if key in data:
+                        return str(data.get(key) or "")
+                # dictだがテキストキーがなければNone
+                return None
+            if isinstance(data, list) and data:
+                # 先頭要素が文字列ならそれを使う
+                if isinstance(data[0], str):
+                    return data[0]
+                if isinstance(data[0], dict) and "text" in data[0]:
+                    return str(data[0].get("text") or "")
+            return None
+        # JSONでない場合は生テキストをそのまま返す
+        return t
 
     def _parse_state_update(self, raw: str) -> tuple[Dict[str, float], Dict[str, str], Dict[str, Any]]:
         """
@@ -768,10 +1336,13 @@ class SimpleClientLLM(ClientAgent):
             "- confidence_change: 変化・目標達成の自信度\n"
             "- like_counselor: カウンセラーへの好感（共感的だと上がり、批判的だと下がりやすい）\n"
             "- tension_counselor: カウンセラーへの不和感・緊張（批判/圧が強いと上がり、受容的だと下がりやすい）\n"
-            "\n"
             "※ like_counselor と tension_counselor は、直近のカウンセラー発話の態度に応じて変化させてください。\n"
             "  例: 共感・尊重→ like↑ / tension↓、批判・見下し・命令口調→ like↓ / tension↑\n"
             "※ 数値は小数第2位まででOKです（例: 5.25）。\n\n"
+            "【更新方法】\n"
+            "- 直近の対話履歴（クライアント/カウンセラー両方）を踏まえ、各スコアを現実的に更新してください。\n"
+            "- 対話の流れに矛盾しないよう、前のクライアント発話で語られた感情・価値観・迷いも考慮してください。\n"
+            "- カウンセラーの直近発話に対する反応（好感/緊張）も反映してください。\n\n"
             f"現時点のスコア: {json.dumps(state_dict, ensure_ascii=False)}\n\n"
             "【スコアの出やすさの特性（-1:出にくい, 0:標準, +1:出やすい）】\n"
             f"{json.dumps(trait_dict, ensure_ascii=False)}\n\n"
@@ -819,24 +1390,32 @@ class SimpleClientLLM(ClientAgent):
         応答生成用のプロンプトを組み立てる。
         更新後の内部状態と理由を参考情報として与え、自然な返答だけを出させる。
         """
-        state_json = json.dumps(self.internal_state.to_full_dict(), ensure_ascii=False)
-        reasons_json = json.dumps(state_reason, ensure_ascii=False)
+        state_dict = self.internal_state.to_full_dict()
+        state_text = " / ".join([f"{k}={v}" for k, v in state_dict.items()])
+        reasons_text = " / ".join([f"{k}:{v}" for k, v in (state_reason or {}).items()]) or "なし"
         change_label = state_meta.get("client_change_talk_type", "")
         sustain_label = state_meta.get("client_sustain_talk_type", "")
 
         system_prompt = (
             (self.persona or "")
             + "\n\n"
-            "上記ペルソナとして、クライアントの返答を1〜3文で自然に生成してください。\n"
-            "出力はテキストのみ。JSONやメタ情報は不要です。\n"
-            "更新後の内部状態: "
-            + state_json
-            + "\n内部状態変化の理由（参考）: "
-            + reasons_json
-            + "\n変化言語ラベル: "
-            + str(change_label)
-            + " / 持続言語ラベル: "
-            + str(sustain_label)
+            "- 上記ペルソナとして、クライアントの返答を基本1文、長くても3文で自然に生成してください。\n"
+            "- 内部状態や理由、ラベルは出力に明示せず、人物像の背景情報としてのみ解釈してください。\n"
+            "- 単に「はい」と答えるだけのこともあれば、直前のカウンセラー発話にまず一言リアクションしつつ、自分の状況に即した応答をすることもあります。新しい具体化・揺れ・問い返しなどを少し加えて返すこともあります。\n"
+            "- 立て続けに質問をすることもあれば、質問ばかり繰り返さずに、相手の発言を踏まえて思ったことや感じたことを表明するだけのこともあります。\n"
+            "- presenting_concern を丸ごと再掲せず、流れに沿った短い返答にしてください。\n"
+            "- 【禁止】JSON/コード/記号だけの出力（{} や [] など）はしない。テキストのみ。空行や空オブジェクトも返さない。\n"
+            "-  更新後の内部状態(参考): "
+            + state_text
+            + "\n内部状態変化の理由(参考): "
+            + reasons_text
+            + f"\n変化言語ラベル: {change_label} / 持続言語ラベル: {sustain_label}\n"
+            "例: 「朝がつらいときは、準備に時間が足りなくて焦ります。」\n"
+            "- 前提としてクライアントは悩んでいる。どうしていいかわからない。\n"
+            "- 助言に対して、まずは 自分の状況に合うか を確認する。\n"
+            "- 同意する前に、不安/障壁/コスト を1つ挙げる。\n"
+            "- 行動案を自分から作らず、質問で返すか難しさの説明をする。\n"
+            "- 納得できない時は、丁寧に保留する。\n"
         )
 
         messages: List[Dict[str, str]] = [{"role": "system", "content": system_prompt}]

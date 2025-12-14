@@ -31,7 +31,7 @@ main() {
     echo "🚀 プロジェクト起動スクリプトを開始します..."
     echo "============================================================"
     
-    ENV_NAME="myenv"
+    ENV_NAME="py-dspy"
     ENV_FILE="environment.yml"
     
     # ステップ 1: condaの確認

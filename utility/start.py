@@ -90,7 +90,7 @@ def main():
     print("🚀 プロジェクト起動スクリプトを開始します...")
     print("=" * 60)
     
-    env_name = "myenv"
+    env_name = "py-dspy"
     env_file = "environment.yml"
     
     # 1. condaの確認
@@ -141,7 +141,7 @@ def main():
         activate_cmd = f"source activate {env_name}"
     
     print(f"   実行してください: {activate_cmd}")
-    print("   または: conda activate myenv")
+    print("   または: conda activate py-dspy")
     print()
     
     # 5. 環境チェック
@@ -161,7 +161,7 @@ def main():
     print()
     print("💡 ヒント:")
     print("   - 環境を非アクティブにする: conda deactivate")
-    print("   - 環境を削除する: conda env remove -n myenv")
+    print("   - 環境を削除する: conda env remove -n py-dspy")
     print("   - 環境を更新する: conda env update -f environment.yml")
     print("   - 利用可能な環境を確認: conda env list")
 

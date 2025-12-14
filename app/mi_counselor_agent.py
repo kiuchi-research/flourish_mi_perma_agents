@@ -7,6 +7,7 @@ from enum import Enum
 import math
 import random
 import re
+from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional, Protocol, Sequence, Tuple
 
 from openai_llm import OpenAIResponsesLLM
@@ -254,6 +255,29 @@ _RE_INFO_REQ = re.compile(r"(教えて|知りたい|情報|アドバイス|提�
 _RE_YES = re.compile(r"^(はい|ええ|うん|お願いします|お願い|いいです|大丈夫|ok|OK|了解|ぜひ|是非)", re.IGNORECASE)
 _RE_NO = re.compile(r"^(いいえ|いや|やめて|いりません|不要|結構です|ノー|no|NO)", re.IGNORECASE)
 
+# 助言リクエストを強く示すフレーズ（空白を除去したテキストで判定する）
+_INFO_REQUEST_STRONG_MARKERS = [
+    "教えてください",
+    "教えてほしい",
+    "教えて欲しい",
+    "教えてもらえますか",
+    "アドバイスがほしい",
+    "アドバイスください",
+    "アドバイスをください",
+    "おすすめを教えて",
+    "オススメを教えて",
+    "提案がほしい",
+    "提案してください",
+    "助言をください",
+    "コツを知りたい",
+    "コツを教えて",
+    "方法を教えて",
+    "やり方を教えて",
+    "どうすればいい",
+    "どうしたらいい",
+    "何をすればいい",
+]
+
 # 抵抗（抵抗・反発）のシグナル（雑でOK：最初はルールが主）
 _RESIST_MARKERS = [
     # 典型的な拒否・反発
@@ -290,6 +314,8 @@ def _jaccard(a: set, b: set) -> float:
 
 
 def _estimate_novelty(user_text: str, last_user_text: str) -> float:
+    clean_len = len(re.sub(r"\s+", "", user_text))
+
     # 1) 文字bi-gramの差
     sim = _jaccard(_char_bigrams(user_text), _char_bigrams(last_user_text))
     novelty = 1.0 - sim
@@ -307,8 +333,12 @@ def _estimate_novelty(user_text: str, last_user_text: str) -> float:
         novelty = min(1.0, novelty + 0.10)
 
     # 4) 極端に短い入力でも、完全に0にはしない（過去を踏まえ反射できるため）
-    if len(re.sub(r"\s+", "", user_text)) <= 8:
+    if clean_len <= 8:
+        # 短い相槌などで新情報がない場合に1.0扱いにならないよう上限を設ける
+        novelty = min(novelty, 0.45)
         novelty = max(novelty, 0.15)
+    elif clean_len <= 14:
+        novelty = min(novelty, 0.8)
 
     return max(0.0, min(1.0, novelty))
 
@@ -329,6 +359,18 @@ def _detect_permission(text: str) -> Optional[bool]:
     if "やめて" in t or "やめてください" in t:
         return False
     return None
+
+
+def _detect_info_request(text: str) -> bool:
+    """
+    助言を明確に求めている場合のみ True にする。
+    - 明確なフレーズのヒットを最優先
+    - それ以外は「質問調」かつ情報キーワードを含むケースに限定
+    """
+    normalized = re.sub(r"\s+", "", text)
+    if any(marker in normalized for marker in _INFO_REQUEST_STRONG_MARKERS):
+        return True
+    return bool(_RE_INFO_REQ.search(text) and _RE_QUESTION.search(text))
 
 
 def _parse_json_from_text(text: str) -> Optional[Any]:
@@ -362,7 +404,7 @@ def extract_features_rule(user_text: str, state: DialogueState, cfg: PlannerConf
     - allow_reflect_override が True なら、連続反射キャップを緩める
     """
     user_is_question = bool(_RE_QUESTION.search(user_text))
-    user_requests_info = bool(_RE_INFO_REQ.search(user_text))
+    user_requests_info = _detect_info_request(user_text)
     has_permission = _detect_permission(user_text) if state.info_mode == InfoMode.WAITING_PERMISSION else None
 
     resistance = _score_from_markers(user_text, _RESIST_MARKERS)
@@ -485,7 +527,11 @@ class LLMFeatureExtractor:
         change_talk = _clamp(overlay.get("change_talk", base_features.change_talk))
         novelty = _clamp(overlay.get("novelty", base_features.novelty))
         user_is_question = bool(overlay.get("user_is_question", base_features.user_is_question))
-        user_requests_info = bool(overlay.get("user_requests_info", base_features.user_requests_info))
+        overlay_user_requests_info = bool(overlay.get("user_requests_info", base_features.user_requests_info))
+        user_requests_info = _detect_info_request(user_text)
+        info_request_note = None
+        if overlay_user_requests_info and not user_requests_info:
+            info_request_note = "overlay_true_but_not_explicit"
         has_permission_val = overlay.get("has_permission", base_features.has_permission)
         has_permission: Optional[bool]
         if has_permission_val is None or has_permission_val == "":
@@ -530,6 +576,7 @@ class LLMFeatureExtractor:
             "raw_output": raw,
             "parsed": overlay,
             "fallback": base_debug,
+            "info_request_note": info_request_note,
         }
         return merged, debug
 
@@ -598,6 +645,11 @@ def plan_next_action(
     if state.info_mode == InfoMode.READY_TO_PROVIDE:
         debug["info_mode_transition"] = "READY_TO_PROVIDE -> PROVIDE_INFO"
         return MainAction.PROVIDE_INFO, debug
+
+    # 2) 挨拶フェーズは挨拶＋オープン質問を優先（聞き返しではなく）
+    if state.phase == Phase.GREETING and state.turn_index == 0:
+        debug["trigger"] = "greeting_open_question"
+        return MainAction.QUESTION, debug
 
     # 2) ユーザが情報を求めたら、まず許可を取る
     if features.user_requests_info:
@@ -887,10 +939,21 @@ class LLMPhaseClassifier:
             "- 次の一歩決定: 具体的な小さな次の行動の合意\n"
             "- クロージング: 要点まとめ、次回への接続、終結\n"
             "\n"
-            "【補助ルール】\n"
-            "- 直近のやり取り全体から“今どの作業をしているか”で判断してください。\n"
-            "- 不明確なら、現在フェーズを維持してください。\n"
-            "- 重要度や自信が低そうなら、目的確認や現状確認など前段階へ戻ってもよい（柔軟に遷移）。\n"
+            "【判定のコツ】\n"
+            "- 最新のクライアント発話を最重視し、直近8ターンの文脈も踏まえる。\n"
+            "- 挨拶と名乗り以外の内容（困りごと・疲れ・相談したい等）が出たら、挨拶ではなく目的確認/現状確認を優先。\n"
+            "- 「相談していいですか」「話したいことがあります」→ 目的確認 になりやすい。\n"
+            "- 困りごとや状態描写（疲れた・悩んでいる・どうしよう）→ 現状確認。\n"
+            "- 具体的な行動や習慣の話（やめたい/始めたい/目標/いつから）→ 標的行動焦点化。\n"
+            "- 重要度や自信を語る（どのくらい大事/できそうか）→ 重要度促進/自信度促進。\n"
+            "- 不明確なら現在フェーズを維持しつつ、挨拶に留まりすぎないように。\n"
+            "\n"
+            "【ミニ例】\n"
+            "- 「こんにちは」→ あいさつ\n"
+            "- 「相談していいですか？」→ 目的確認\n"
+            "- 「仕事に疲れていて困っています」→ 現状確認\n"
+            "- 「早起きを始めたいです」→ 標的行動焦点化\n"
+            "- 「どのくらい大事だと思いますか？」→ 重要度促進\n"
         )
 
         user = (
@@ -1011,6 +1074,26 @@ _RISK_SELF_HARM = [
 ]
 _RISK_HARM_OTHERS = ["殺す", "傷つけてやる", "復讐", "危害を加える"]
 _RISK_SEVERE = ["幻聴", "幻覚", "妄想", "制御できない", "パニックで", "手がつけられない"]
+
+# 是認（affirmation）を検知するためのシンプルなパターン群
+_AFFIRM_PATTERNS = [
+    r"すばらしい",
+    r"素晴らしい",
+    r"頑張っ",
+    r"がんばっ",
+    r"続けて",
+    r"取り組んで",
+    r"大変な中",
+    r"努力",
+    r"勇気",
+    r"できてい",
+    r"えらい",
+    r"偉い",
+    r"工夫",
+    r"大切に",
+    r"向き合っ",
+    r"前に進",
+]
 
 
 @dataclass
@@ -1162,6 +1245,10 @@ def select_reflection_style(features: PlannerFeatures) -> ReflectionStyle:
     - チェンジトークが強い: 複雑反射で価値や強みを織り込む
     - 短い/新情報が少ない: 簡単反射で軽く確認
     """
+    # 初期ターンや挨拶〜現状把握ではシンプル反射を優先して不自然な言い換えを抑える
+    if features.is_short_reply or features.novelty < 0.25 or features.topic_shift:
+        return ReflectionStyle.SIMPLE
+    return ReflectionStyle.COMPLEX
     if features.resistance >= 0.6:
         return ReflectionStyle.DOUBLE_SIDED
     if features.change_talk >= 0.55:
@@ -1221,15 +1308,17 @@ def build_prompt(
         "- 直近だけでなく、これまでのやり取りも踏まえてよい。\n"
         "- 説教・押しつけ・断定を避ける。\n"
         "- 専門用語は避けるか、必要なら短く説明する。\n"
+        "- 出力は簡潔に、1文程度で。\n"
+        "- 中高生にも理解できる平易な言葉を使う。\n"
     )
 
     phase_guidance = {
         Phase.GREETING: "目的：安心できる雰囲気で挨拶し、話しやすい土台を作る。",
         Phase.PURPOSE_CONFIRMATION: "目的：今日は何を扱うか（目的・ゴール）を一緒に確認する。",
         Phase.CURRENT_STATUS_CHECK: "目的：現状・困りごと・気持ち・状況を丁寧に理解する。",
-        Phase.FOCUSING_TARGET_BEHAVIOR: "目的：標的となる行動を具体化し、焦点を合わせる。",
+        Phase.FOCUSING_TARGET_BEHAVIOR: "目的：標的とすべき行動を具体化し、焦点を合わせる。",
         Phase.IMPORTANCE_PROMOTION: "目的：変える重要性（理由・価値）を言語化し、強める。",
-        Phase.CONFIDENCE_PROMOTION: "目的：できそう感（自信）を高め、障壁と資源を整理する。",
+        Phase.CONFIDENCE_PROMOTION: "目的：障壁と資源を整理して、できそう感（自信）を高める。",
         Phase.NEXT_STEP_DECISION: "目的：次の一歩を小さく具体化し、合意する。",
         Phase.CLOSING: "目的：要点をまとめ、次回への接続や労いを添えて終える。",
     }[state.phase]
@@ -1244,14 +1333,18 @@ def build_prompt(
     elif action == MainAction.REFLECT:
         action_rule = (
             "出力要件（聞き返し/言い換え）：\n"
-            "- 相手の発言内容・感情・価値を、丁寧に言い換えて返す。\n"
-            "- 新情報を足しすぎない（推測するなら「〜かもしれません」など控えめに）。\n"
+            "- 相手の発言の中から1つの感情事実だけを拾い、短く言い換える（盛り込みすぎない）。\n"
+            "- 文末は「～ですね」「～のようですね」「～かもしれません」「～と」と、言いきりで終わる。\n"
+            "- 「〜かもしれません」は多用せず、様々な文末表現を使用する。\n"
+            "- 「〜が伝わって」、「～が伝わってきますが」は、使用しない。\n"
             "- 質問しない（文末に「？」を付けない）。\n"
-            "- 長さは2〜4文程度。\n"
+            "- 助言はしない。\n"
+            "- 長さは1文（長くても2文）まで。\n"
+            "- 日本語として自然な表現で伝え返す。\n"
         )
         style_hint = {
             ReflectionStyle.SIMPLE: "- スタイル: 簡単反射（事実中心で短く、確認を兼ねて）。\n",
-            ReflectionStyle.COMPLEX: "- スタイル: 複雑反射（感情や価値観を織り込み、意味づけを深める）。\n",
+            ReflectionStyle.COMPLEX: "- スタイル: 複雑反射（感情、価値観、言葉の背後にある意図や思いなどを想像し、織り込み、意味づけを深める）。\n",
             ReflectionStyle.DOUBLE_SIDED: "- スタイル: 両面反射（やりたい/やりたくない双方を並べてバランスを取る）。\n",
         }.get(reflection_style)
         if style_hint:
@@ -1262,7 +1355,7 @@ def build_prompt(
             "- 原則1つの質問。\n"
             "- はい/いいえで終わりにくい聞き方（オープン質問）を優先。\n"
             "- 説教や誘導質問を避ける。\n"
-            "- 必要なら、短い一文の受け止め（反射）を前置きしてよい。\n"
+            "- 短い一文の受け止め（反射）やあいづちを入れてから質問をする。\n"
         )
     elif action == MainAction.SUMMARY:
         action_rule = (
@@ -1275,7 +1368,7 @@ def build_prompt(
         action_rule = (
             "出力要件（許可取り）：\n"
             "- 情報共有や提案をする前に、許可を取る。\n"
-            "- 1〜2文で簡潔に。最後は質問で終える。\n"
+            "- 1文程度で簡潔に。最後は質問で終える。\n"
         )
     elif action == MainAction.PROVIDE_INFO:
         action_rule = (
@@ -1291,6 +1384,8 @@ def build_prompt(
         "\n是認（affirmation）の入れ方:\n"
         "- 努力・工夫・価値観・強み・小さな前進を具体的に認める。\n"
         "- お世辞や過度な称賛にしない。\n"
+        "- 短い例: 「大変な中でも続けていて素晴らしいですね」「向き合おうとしているのが伝わってきます」「ここまで取り組まれていてすごいです」「努力されているんですね」「工夫されているんですね」「すでに取り組めている部分があるんですね」。\n"
+        "- 必ず1文は是認を含める。\n"
         if add_affirm
         else ""
     )
@@ -1306,7 +1401,32 @@ def build_prompt(
 # ----------------------------
 # Output validation（最低限）
 # ----------------------------
-def validate_output(action: MainAction, text: str) -> Tuple[bool, str]:
+def _contains_affirmation(text: str) -> bool:
+    """簡易に是認らしさを検出する（典型フレーズの部分一致）。"""
+    for pat in _AFFIRM_PATTERNS:
+        if re.search(pat, text):
+            return True
+    return False
+
+
+def _similarity_ratio(a: str, b: str) -> float:
+    try:
+        return SequenceMatcher(None, a, b).ratio()
+    except Exception:
+        return 0.0
+
+
+def _too_similar_to_previous(prev: str, cur: str, *, threshold: float = 0.9, min_len: int = 8) -> Tuple[bool, float]:
+    """直前のカウンセラー発話とほぼ同じかを判定し、類似度を返す。"""
+    prev_clean = prev.strip()
+    cur_clean = cur.strip()
+    if len(prev_clean) < min_len or len(cur_clean) < min_len:
+        return False, 0.0
+    ratio = _similarity_ratio(prev_clean, cur_clean)
+    return ratio >= threshold, ratio
+
+
+def validate_output(action: MainAction, text: str, *, add_affirm: bool = False) -> Tuple[bool, str]:
     t = text.strip()
     if not t:
         return False, "empty"
@@ -1323,6 +1443,8 @@ def validate_output(action: MainAction, text: str) -> Tuple[bool, str]:
         qcount = t.count("？") + t.count("?")
         if qcount >= 2:
             return False, "too_many_questions"
+    if add_affirm and not _contains_affirmation(t):
+        return False, "affirmation_missing"
     return True, "ok"
 
 
@@ -1397,6 +1519,11 @@ class MIRhythmBot:
                     user_text=user_text,
                 )
                 conf = float(phase_debug.get("confidence", 1.0))
+                if ph == Phase.GREETING and self.state.turn_index >= 1:
+                    fallback = classify_phase_heuristic(user_text, self.state.phase)
+                    phase_debug["fallback_phase"] = fallback.value
+                    phase_debug["fallback_reason"] = "avoid_greeting_after_start"
+                    ph = fallback
                 if conf < self.phase_confidence_threshold:
                     fallback = classify_phase_heuristic(user_text, self.state.phase)
                     phase_debug["fallback_phase"] = fallback.value
@@ -1438,7 +1565,6 @@ class MIRhythmBot:
         # 4) 行動選択（LLMランカーを優先し、なければヒューリスティック）
         crisis_override = risk_assessment and risk_assessment.level == RiskLevel.HIGH
         llm_rank_bias: Optional[List[MainAction]] = None
-        llm_action_choice: Optional[MainAction] = None
         ranker_debug: Optional[Dict[str, Any]] = None
         if (not crisis_override) and self.action_ranker is not None:
             try:
@@ -1458,8 +1584,6 @@ class MIRhythmBot:
                     seen.add(a)
                     cleaned.append(a)
                 llm_rank_bias = cleaned
-                if cleaned:
-                    llm_action_choice = cleaned[0]
             except Exception as e:
                 llm_rank_bias = None
                 ranker_debug = {"error": str(e)}
@@ -1468,20 +1592,14 @@ class MIRhythmBot:
             action = MainAction.PROVIDE_INFO
             debug = {"sampling": "crisis_override", "risk_level": risk_assessment.level.value}
         else:
-            if llm_action_choice is not None:
-                action = llm_action_choice
-                debug = {
-                    "sampling": "llm_action_ranker",
-                    "ranker_choice": llm_action_choice.value,
-                    "llm_rank_bias": [a.value for a in llm_rank_bias] if llm_rank_bias else [],
-                }
-            else:
-                action, debug = plan_next_action(
-                    state=self.state,
-                    features=features,
-                    cfg=self.cfg,
-                    llm_rank_bias=llm_rank_bias,
-                )
+            action, debug = plan_next_action(
+                state=self.state,
+                features=features,
+                cfg=self.cfg,
+                llm_rank_bias=llm_rank_bias,
+            )
+            debug["sampling"] = debug.get("sampling", "argmax")
+            debug["action_source"] = "rule_with_llm_bias" if llm_rank_bias else "rule"
 
         # permissionが得られたなら情報共有へ
         if self.state.info_mode == InfoMode.WAITING_PERMISSION and features.has_permission is True:
@@ -1530,12 +1648,14 @@ class MIRhythmBot:
         assistant_text = self.llm.generate(messages, temperature=0.2)
 
         # 8) 検査→必要なら一回だけやり直し
-        ok, reason = validate_output(action, assistant_text)
+        ok, reason = validate_output(action, assistant_text, add_affirm=add_affirm)
         if not ok:
             repair = (
                 f"直前の出力が要件を満たしていません（理由: {reason}）。\n"
                 "要件を厳密に守って、同じ主動作で書き直してください。"
             )
+            if reason == "affirmation_missing":
+                repair += "\n短い是認を1文必ず入れてください（努力や工夫を具体的に認める表現）。"
             messages.append({"role": "system", "content": repair})
             assistant_text = self.llm.generate(messages, temperature=0.2)
 
@@ -1562,6 +1682,30 @@ class MIRhythmBot:
                 )
                 messages.append({"role": "system", "content": repair})
                 assistant_text = self.llm.generate(messages, temperature=0.15)
+
+        # 直前のカウンセラー発話とほぼ同じなら、1回だけ書き直す
+        prev_assistant: Optional[str] = None
+        for role, text in reversed(self.history):
+            if role == "assistant":
+                prev_assistant = text
+                break
+        prev_action = self.state.last_actions[-1] if self.state.last_actions else None
+        similarity_info: Optional[Dict[str, Any]] = None
+        if prev_assistant:
+            too_close, ratio = _too_similar_to_previous(prev_assistant, assistant_text)
+            if too_close and (prev_action is None or prev_action == action):
+                similarity_info = {"ratio": ratio}
+                repair = (
+                    "直前のカウンセラー発話と内容がほぼ同じになっています。\n"
+                    "同じ主動作のまま、前回とは違う観点や具体例で、1文で短く言い換えてください。"
+                )
+                messages.append({"role": "system", "content": repair})
+                assistant_text = self.llm.generate(messages, temperature=0.2)
+                ok, reason = validate_output(action, assistant_text, add_affirm=add_affirm)
+                if not ok:
+                    similarity_info["rewrite_validation_failed"] = reason
+        if similarity_info:
+            decision.debug["similarity_rewrite"] = similarity_info
 
         # 9) 履歴更新（assistant）＋state更新
         self.history.append(("assistant", assistant_text))

@@ -7,35 +7,68 @@ from dataclasses import asdict
 from typing import Any, Dict, Optional
 
 from conversation_environment import ConversationEnvironment, ConversationTurn
-from env_utils import build_llm_from_config, get_model_config, load_openai_api_key
-from mi_counselor_agent import LLMActionRanker, LLMPhaseClassifier, MIRhythmBot
-from perma_client_agent import SimpleClientLLM
+from env_utils import load_openai_api_key
+from perma_client_agent import DEFAULT_FIRST_CLIENT_UTTERANCE, SimpleClientLLM
+from client_llm_loader import build_client_llms
 from session_log_tools import finalize_session
+from counselor_llm_loader import build_counselor_stack
 
 
 # ==============================
 # LLM ラッパー（Chat Completions）
 # ==============================
+def _format_phase_debug(debug: Dict[str, Any]) -> str:
+    """フェーズ判定の簡易要約を作る。"""
+    method = debug.get("method") or "rule"
+    confidence = debug.get("confidence")
+    fallback = debug.get("fallback_phase")
+    parts = [f"method={method}"]
+    try:
+        if confidence is not None:
+            parts.append(f"conf={float(confidence):.2f}")
+    except (TypeError, ValueError):
+        pass
+    if fallback:
+        parts.append(f"fallback={fallback}")
+    return " / ".join(parts)
 
 
-def _build_optional_phase_classifier(api_key: str, cfg: Dict[str, Any]) -> Optional[LLMPhaseClassifier]:
-    """enabled が真のときだけ LLMPhaseClassifier を生成する。"""
-    if not cfg:
-        return None
-    if cfg.get("enabled") is False:
-        return None
-    llm = build_llm_from_config(cfg, api_key)
-    return LLMPhaseClassifier(llm=llm, temperature=0.0, max_history_turns=8)
+def _format_action_debug(debug: Dict[str, Any]) -> str:
+    """主動作選択の簡易要約を作る。"""
+    sampling = debug.get("sampling")
+    llm_bias = debug.get("llm_rank_bias") or []
+    ranker_debug = debug.get("ranker_debug") or {}
+    risk_level = debug.get("risk_level")
+    if sampling == "crisis_override":
+        return f"危機優先(risk={risk_level})"
+    if ranker_debug.get("error"):
+        return f"ranker_error={ranker_debug.get('error')}"
+    if sampling in ("argmax", "stochastic"):
+        bias = ", ".join(llm_bias) if llm_bias else "-"
+        bias_part = f"LLMバイアス={bias}" if llm_bias else "LLMバイアスなし"
+        return f"ルール決定({sampling}; {bias_part})"
+    return sampling or "rule"
 
 
-def _build_optional_action_ranker(api_key: str, cfg: Dict[str, Any]) -> Optional[LLMActionRanker]:
-    """enabled が真のときだけ LLMActionRanker を生成する。"""
-    if not cfg:
-        return None
-    if cfg.get("enabled") is False:
-        return None
-    llm = build_llm_from_config(cfg, api_key)
-    return LLMActionRanker(llm=llm)
+def _format_evaluation_debug(debug: Dict[str, Any]) -> str:
+    """応答評価（MI準拠スコアなど）がある場合の要約を作る。"""
+    evaluation = debug.get("evaluation") or {}
+    if not evaluation:
+        return "評価器なし"
+    score = evaluation.get("score")
+    feedback = evaluation.get("feedback")
+    parts = []
+    try:
+        if score is not None:
+            parts.append(f"score={float(score):.2f}")
+    except (TypeError, ValueError):
+        parts.append(f"score={score}")
+    if feedback:
+        trimmed = str(feedback)
+        if len(trimmed) > 120:
+            trimmed = trimmed[:117] + "..."
+        parts.append(f"feedback={trimmed}")
+    return " / ".join(parts) if parts else "評価情報なし"
 
 
 # ==============================
@@ -116,29 +149,24 @@ def run_human_client_counselor_cli(
     check_and_activate_conda_env(conda_env)
 
     api_key = load_openai_api_key()
-    counselor_cfg = get_model_config(
-        "human_client_counselor",
-        role="counselor",
-    )
-    counselor_phase_cfg = get_model_config(
-        "counselor_phase_classifier",
-        role="counselor",
-        fallback_modes=["human_client_counselor"],
-    )
-    counselor_action_cfg = get_model_config(
-        "counselor_action_ranker",
-        role="counselor",
-        fallback_modes=["human_client_counselor"],
-    )
-    llm = build_llm_from_config(counselor_cfg, api_key)
-    phase_classifier = _build_optional_phase_classifier(api_key, counselor_phase_cfg)
-    action_ranker = _build_optional_action_ranker(api_key, counselor_action_cfg)
-    counselor = MIRhythmBot(llm=llm, phase_classifier=phase_classifier, action_ranker=action_ranker)
+    counselor_mode = os.getenv("COUNSELOR_MODE", "counselor_llm")
+    counselor_stack = build_counselor_stack(api_key=api_key)
+    counselor = counselor_stack["counselor"]
+    llm = counselor_stack["llm"]
+    counselor_cfg = counselor_stack["counselor_cfg"]
+    counselor_phase_cfg = counselor_stack["phase_cfg"]
+    counselor_action_cfg = counselor_stack["action_cfg"]
+    risk_detector_cfg = counselor_stack["risk_cfg"]
+    mi_evaluator_cfg = counselor_stack["mi_eval_cfg"]
+    counselor.phase_confidence_threshold = 0.3
     session_meta = {
         "session_mode": "human_client",
         "openai_model": counselor_cfg.get("model", ""),
         "phase_classifier_model": counselor_phase_cfg.get("model", "") if counselor_phase_cfg.get("enabled") else "",
         "action_ranker_model": counselor_action_cfg.get("model", "") if counselor_action_cfg.get("enabled") else "",
+        "risk_detector_model": risk_detector_cfg.get("model", "") if risk_detector_cfg.get("enabled") else "",
+        "mi_evaluator_model": mi_evaluator_cfg.get("model", "") if mi_evaluator_cfg.get("enabled") else "",
+        "counselor_mode": counselor_mode,
         "script_name": script_name,
         "planner_config": asdict(counselor.cfg),
     }
@@ -158,6 +186,17 @@ def run_human_client_counselor_cli(
 
         reply = env.step_with_human(user_text)
         print("Counselor:", reply)
+        counselor_meta = env.log[-1].meta or {}
+        debug = counselor_meta.get("debug") or {}
+        phase_text = counselor_meta.get("phase", "")
+        action_text = counselor_meta.get("main_action", "")
+        add_affirm = counselor_meta.get("add_affirm")
+        phase_debug = debug.get("phase_debug") or {}
+        print("判定結果:")
+        print(f"  フェーズ判定: {phase_text} ({_format_phase_debug(phase_debug)})")
+        affirm_status = "是認あり" if add_affirm else "是認なし"
+        print(f"  行動判定: {action_text} ({affirm_status}; {_format_action_debug(debug)})")
+        print(f"  応答判定: {_format_evaluation_debug(debug)}")
         print("---")
 
     finalize_session(env, llm, log_prefix=f"session_{script_name}")
@@ -180,69 +219,72 @@ def _print_simulation_log(log: List[ConversationTurn]) -> None:
 def run_agent_dual_simulation(
     *,
     script_name: str = "agent_dual_simulation",
-    first_client_utterance: str = "最近、生活リズムが崩れてしまって、気持ちも落ち込んでいます。",
+    # 人間カウンセラー側と同じ初期発話生成ロジックに統一
+    first_client_utterance: str = DEFAULT_FIRST_CLIENT_UTTERANCE,
     max_turns: int = 5,
     conda_env: Optional[str] = "py-dspy",
 ) -> None:
     if conda_env:
         check_and_activate_conda_env(conda_env)
     api_key = load_openai_api_key()
-    counselor_cfg = get_model_config(
-        "self_play_counselor",
-        role="counselor",
-        fallback_modes=["human_client_counselor"],
-    )
-    counselor_phase_cfg = get_model_config(
-        "counselor_phase_classifier",
-        role="counselor",
-        fallback_modes=["self_play_counselor", "human_client_counselor"],
-    )
-    counselor_action_cfg = get_model_config(
-        "counselor_action_ranker",
-        role="counselor",
-        fallback_modes=["self_play_counselor", "human_client_counselor"],
-    )
-    client_cfg = get_model_config("self_play_client", role="client", fallback_modes=["human_counselor_client"])
-    client_state_cfg = get_model_config(
-        "self_play_client_state",
-        role="client",
-        fallback_modes=["self_play_client", "human_counselor_client_state", "human_counselor_client"],
-    )
-    client_reply_cfg = get_model_config(
-        "self_play_client_reply",
-        role="client",
-        fallback_modes=["self_play_client", "human_counselor_client_reply", "human_counselor_client"],
-    )
-    client_style = os.getenv("CLIENT_STYLE", "cooperative")
-    counselor_llm = build_llm_from_config(counselor_cfg, api_key)
-    client_llm_state = build_llm_from_config(client_state_cfg, api_key)
-    client_llm_reply = build_llm_from_config(client_reply_cfg, api_key)
-    phase_classifier = _build_optional_phase_classifier(api_key, counselor_phase_cfg)
-    action_ranker = _build_optional_action_ranker(api_key, counselor_action_cfg)
-
-    counselor = MIRhythmBot(llm=counselor_llm, phase_classifier=phase_classifier, action_ranker=action_ranker)
-    client = SimpleClientLLM(
+    counselor_mode = os.getenv("COUNSELOR_MODE", "counselor_llm")
+    counselor_stack = build_counselor_stack(api_key=api_key)
+    counselor = counselor_stack["counselor"]
+    counselor_llm = counselor_stack["llm"]
+    counselor_cfg = counselor_stack["counselor_cfg"]
+    counselor_phase_cfg = counselor_stack["phase_cfg"]
+    counselor_action_cfg = counselor_stack["action_cfg"]
+    risk_detector_cfg = counselor_stack["risk_cfg"]
+    mi_evaluator_cfg = counselor_stack["mi_eval_cfg"]
+    client_llms = build_client_llms(api_key=api_key)
+    client_cfg = client_llms["client_cfg"]
+    client_state_cfg = client_llms["client_state_cfg"]
+    client_reply_cfg = client_llms["client_reply_cfg"]
+    client_llm_state = client_llms["client_llm_state"]
+    client_llm_reply = client_llms["client_llm_reply"]
+    counselor.phase_confidence_threshold = 0.3
+    client_code = (os.getenv("CLIENT_CODE") or "C01").strip() or "C01"
+    client, client_bundle = SimpleClientLLM.from_profile(
+        client_code=client_code,
         llm=client_llm_reply,
         llm_state=client_llm_state,
         llm_reply=client_llm_reply,
-        style=client_style,
+        env_style=os.getenv("CLIENT_STYLE", "auto"),
+        first_client_utterance_env=os.getenv("FIRST_CLIENT_UTTERANCE"),
+        max_state_step_env=os.getenv("CLIENT_MAX_STATE_STEP", "none"),
+        default_first_utterance=first_client_utterance,
     )
     session_meta = {
         "session_mode": "self_play",
         "openai_model": counselor_cfg.get("model", ""),
         "script_name": script_name,
-        "client_style": client_style,
+        "client_style": client_bundle.style,
+        "client_code": client_code,
+        "client_pattern": client_bundle.derived_meta.get("pattern_code", ""),
+        "client_pattern_label": client_bundle.derived_meta.get("pattern_label", ""),
+        "client_primary_focus": client_bundle.derived_meta.get("primary_focus_code", ""),
+        "client_primary_focus_label": client_bundle.derived_meta.get("primary_focus_label", ""),
+        "client_interpersonal_style": client_bundle.derived_meta.get("interpersonal_style_code", ""),
+        "client_interpersonal_style_label": client_bundle.derived_meta.get("interpersonal_style_label", ""),
+        "client_profiles_path": str(client_bundle.profiles_path),
         "client_model_state": client_state_cfg.get("model", ""),
         "client_model_reply": client_reply_cfg.get("model", ""),
         "phase_classifier_model": counselor_phase_cfg.get("model", "") if counselor_phase_cfg.get("enabled") else "",
         "action_ranker_model": counselor_action_cfg.get("model", "") if counselor_action_cfg.get("enabled") else "",
+        "risk_detector_model": risk_detector_cfg.get("model", "") if risk_detector_cfg.get("enabled") else "",
+        "mi_evaluator_model": mi_evaluator_cfg.get("model", "") if mi_evaluator_cfg.get("enabled") else "",
+        "counselor_mode": counselor_mode,
         "planner_config": asdict(counselor.cfg),
     }
     env = ConversationEnvironment(counselor=counselor, client=client, session_meta=session_meta)
     env.reset()
 
     print("自己対話シミュレーションを開始します...")
-    env.simulate(first_client_utterance=first_client_utterance, max_turns=max_turns, progress=True)
+    env.simulate(
+        first_client_utterance=client_bundle.first_utterance,
+        max_turns=max_turns,
+        progress=True,
+    )
     print("シミュレーション完了。ログを出力します。")
 
     print("\n==== SIMULATION LOG ====")

@@ -2,12 +2,10 @@ import os
 import json
 import re
 from dataclasses import asdict
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import yaml
-
 from env_utils import build_llm_from_config, get_model_config, load_openai_api_key
+from client_llm_loader import build_client_llms
 from perma_client_agent import SimpleClientLLM
 from conversation_environment import ConversationTurn, ManualConversationEnvironment
 from session_log_tools import finalize_session
@@ -22,374 +20,6 @@ from mi_counselor_agent import (
     apply_action_to_state,
     extract_features,
 )
-
-
-# =========================
-# client_profiles.yaml loader / scenario builder
-# =========================
-
-def _find_client_profiles_path() -> Path:
-    """client_profiles.yaml のパスを決める。
-
-    探索順:
-      1) 環境変数 CLIENT_PROFILES_PATH / CLIENTS_YAML_PATH / CLIENTS_YAML
-      2) このスクリプトと同じディレクトリ（client_profiles.yaml → 旧 clients.yaml）
-      3) 1つ上のディレクトリ（同上）
-      4) カレントディレクトリ（同上）
-
-    見つからない場合は FileNotFoundError。
-    """
-
-    env_path = (
-        os.getenv("CLIENT_PROFILES_PATH")
-        or os.getenv("CLIENTS_YAML_PATH")
-        or os.getenv("CLIENTS_YAML")
-    )
-    if env_path:
-        p = Path(env_path).expanduser().resolve()
-        if p.is_file():
-            return p
-        raise FileNotFoundError(f"client_profiles.yaml が見つかりません（環境変数指定）: {p}")
-
-    candidates = [
-        Path(__file__).resolve().parent / "client_profiles.yaml",
-        Path(__file__).resolve().parent.parent / "client_profiles.yaml",
-        Path.cwd() / "client_profiles.yaml",
-        # 互換用（旧ファイル名）
-        Path(__file__).resolve().parent / "clients.yaml",
-        Path(__file__).resolve().parent.parent / "clients.yaml",
-        Path.cwd() / "clients.yaml",
-    ]
-
-    for p in candidates:
-        if p.is_file():
-            return p
-
-    tried = "\n".join([f"- {c}" for c in candidates])
-    raise FileNotFoundError(
-        "client_profiles.yaml が見つかりません。次の場所を探しました:\n"
-        + tried
-        + "\n\n必要なら、CLIENT_PROFILES_PATH=/path/to/client_profiles.yaml を指定してください。"
-    )
-
-
-def _load_client_profiles_yaml(path: Path) -> Dict[str, Any]:
-    """client_profiles.yaml を読み込んで dict を返す。"""
-    with open(path, "r", encoding="utf-8") as f:
-        data = yaml.safe_load(f)
-    return data if isinstance(data, dict) else {}
-
-
-def _get_client_profile(cfg: Dict[str, Any], client_code: str) -> Dict[str, Any]:
-    """cfg['clients'][client_code] を取得（存在しなければエラー）。"""
-    clients = cfg.get("clients")
-    if not isinstance(clients, dict):
-        raise KeyError("client_profiles.yaml に 'clients' セクションがありません。")
-
-    code = (client_code or "").strip()
-    if code not in clients:
-        available = ", ".join(sorted([str(k) for k in clients.keys()]))
-        raise KeyError(f"client_profiles.yaml に client_code={code} がありません。利用可能: {available}")
-
-    profile = clients.get(code)
-    if not isinstance(profile, dict):
-        raise TypeError(f"client_profiles.yaml の clients.{code} が dict ではありません。")
-
-    return profile
-
-
-def _safe_str(x: Any) -> str:
-    if x is None:
-        return ""
-    return str(x).strip()
-
-
-def _derive_client_meta(profile: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, str]:
-    """コード（M1/S1/Pなど）を definitions で展開し、表示用メタを作る。"""
-    defs = cfg.get("definitions")
-    defs = defs if isinstance(defs, dict) else {}
-
-    perma_defs = defs.get("perma")
-    perma_defs = perma_defs if isinstance(perma_defs, dict) else {}
-
-    style_defs = defs.get("interpersonal_styles")
-    style_defs = style_defs if isinstance(style_defs, dict) else {}
-
-    pattern_defs = defs.get("perma_focus_patterns")
-    pattern_defs = pattern_defs if isinstance(pattern_defs, dict) else {}
-
-    pattern_code = _safe_str(profile.get("pattern"))
-    pattern_info = pattern_defs.get(pattern_code)
-    pattern_info = pattern_info if isinstance(pattern_info, dict) else {}
-    pattern_label = _safe_str(pattern_info.get("label")) or pattern_code
-
-    primary_focus_code = _safe_str(pattern_info.get("primary_focus"))
-    primary_focus_label = _safe_str(perma_defs.get(primary_focus_code)) or primary_focus_code
-
-    interpersonal_style_code = _safe_str(profile.get("interpersonal_style"))
-    style_info = style_defs.get(interpersonal_style_code)
-    style_info = style_info if isinstance(style_info, dict) else {}
-    interpersonal_label = _safe_str(style_info.get("label")) or interpersonal_style_code
-    interpersonal_brief = _safe_str(style_info.get("brief"))
-
-    meta = {
-        "pattern_code": pattern_code,
-        "pattern_label": pattern_label,
-        "primary_focus_code": primary_focus_code,
-        "primary_focus_label": primary_focus_label,
-        "interpersonal_style_code": interpersonal_style_code,
-        "interpersonal_style_label": interpersonal_label,
-        "interpersonal_style_brief": interpersonal_brief,
-    }
-    return meta
-
-
-def _resolve_client_llm_style(*, env_style: str, interpersonal_style_code: str) -> str:
-    """SimpleClientLLM.style（cooperative/ambivalent/resistant）を決める。
-
-    - env_style が 'auto' のときは interpersonal_style_code（S1/S2/S3）から推定
-    - それ以外は env_style を優先
-    """
-
-    s = (env_style or "auto").strip().lower()
-    if s in ("cooperative", "ambivalent", "resistant"):
-        return s
-
-    # auto 推定
-    code = (interpersonal_style_code or "").strip()
-    mapping = {
-        "S1": "cooperative",  # 内省・協力型
-        "S2": "resistant",    # 防衛・懐疑型
-        "S3": "cooperative",  # 助言志向・せっかち型（探索が長いと焦れやすいが、敵対とは限らない）
-    }
-    return mapping.get(code, "cooperative")
-
-
-def _format_perma_baseline(baseline_perma: Any, cfg: Dict[str, Any]) -> List[str]:
-    """baseline_perma（P/E/R/M/A）を definitions.perma を使って整形。"""
-    defs = cfg.get("definitions")
-    defs = defs if isinstance(defs, dict) else {}
-    perma_defs = defs.get("perma")
-    perma_defs = perma_defs if isinstance(perma_defs, dict) else {}
-
-    if not isinstance(baseline_perma, dict):
-        return []
-
-    lines: List[str] = []
-    order = ["P", "E", "R", "M", "A"]
-
-    for k in order:
-        if k not in baseline_perma:
-            continue
-        name = _safe_str(perma_defs.get(k)) or k
-        try:
-            v = float(baseline_perma.get(k))
-            # 整数っぽいなら整数表示
-            if abs(v - int(v)) < 1e-9:
-                v_str = str(int(v))
-            else:
-                v_str = str(v)
-        except Exception:
-            v_str = _safe_str(baseline_perma.get(k))
-        lines.append(f"- {name} [{k}]: {v_str}")
-
-    # 追加キーがあれば後ろに
-    for k, v in baseline_perma.items():
-        if str(k) in order:
-            continue
-        name = _safe_str(perma_defs.get(str(k))) or str(k)
-        lines.append(f"- {name} [{k}]: {v}")
-
-    return lines
-
-
-def _format_trait_expression(trait_expression: Any) -> List[str]:
-    """trait_expression_*（-1/0/1）を読みやすく整形。"""
-    if not isinstance(trait_expression, dict):
-        return []
-
-    desc = {
-        -1: "出にくい",
-        0: "標準",
-        1: "出やすい",
-    }
-
-    label_map = {
-        "trait_expression_pos": "pos_affect（ポジティブ感情）",
-        "trait_expression_neg": "neg_affect（ネガティブ感情）",
-        "trait_expression_importance": "importance_change（重要度）",
-        "trait_expression_confidence": "confidence_change（自信）",
-        "trait_expression_like": "like_counselor（好感）",
-        "trait_expression_tension": "tension_counselor（緊張/不和）",
-    }
-
-    order = list(label_map.keys())
-    lines: List[str] = []
-
-    for k in order:
-        if k not in trait_expression:
-            continue
-        try:
-            v = float(trait_expression.get(k))
-        except Exception:
-            v = 0.0
-
-        # -1/0/1 として表示（微妙な値が来た場合は丸める）
-        if v <= -0.5:
-            vi = -1
-        elif v >= 0.5:
-            vi = 1
-        else:
-            vi = 0
-
-        label = label_map.get(k, k)
-        lines.append(f"- {label}: {vi}（{desc.get(vi, '標準')}）")
-
-    return lines
-
-
-def _build_client_scenario_text(
-    client_code: str,
-    profile: Dict[str, Any],
-    cfg: Dict[str, Any],
-    meta: Dict[str, str],
-) -> str:
-    """SimpleClientLLM.scenario に渡すテキストを組み立てる。
-
-    ここで「M1」「S1」「P/E/R/M/A」などのコードを definitions で展開し、
-    LLM が誤解しにくい、読みやすい形にして渡します。
-    """
-
-    lines: List[str] = []
-
-    # ---- 設定（コード + 展開） ----
-    lines.append("【クライアント設定】")
-    lines.append(f"- client_code: {client_code}")
-
-    pattern_code = meta.get("pattern_code", "")
-    pattern_label = meta.get("pattern_label", "")
-    pf_code = meta.get("primary_focus_code", "")
-    pf_label = meta.get("primary_focus_label", "")
-
-    if pattern_code:
-        if pf_code and pf_label:
-            lines.append(f"- pattern: {pattern_code}（{pattern_label}） / primary_focus: {pf_code}（{pf_label}）")
-        else:
-            lines.append(f"- pattern: {pattern_code}（{pattern_label}）")
-
-    is_code = meta.get("interpersonal_style_code", "")
-    is_label = meta.get("interpersonal_style_label", "")
-    is_brief = meta.get("interpersonal_style_brief", "")
-    if is_code:
-        if is_brief:
-            lines.append(f"- interpersonal_style: {is_code}（{is_label}）: {is_brief}")
-        else:
-            lines.append(f"- interpersonal_style: {is_code}（{is_label}）")
-
-    # ---- 背景 ----
-    bg = profile.get("background")
-    bg = bg if isinstance(bg, dict) else {}
-    bg_lines: List[str] = []
-    age = _safe_str(bg.get("age_range"))
-    occ = _safe_str(bg.get("occupation_context"))
-    living = _safe_str(bg.get("living_situation"))
-    notes = _safe_str(bg.get("notes"))
-
-    if age:
-        bg_lines.append(f"- 年代: {age}")
-    if occ:
-        bg_lines.append(f"- 仕事文脈: {occ}")
-    if living:
-        bg_lines.append(f"- 生活状況: {living}")
-    if notes:
-        bg_lines.append(f"- 補足: {notes}")
-
-    if bg_lines:
-        lines.append("")
-        lines.append("【背景】")
-        lines.extend(bg_lines)
-
-    # ---- 主訴 ----
-    pc = _safe_str(profile.get("presenting_concern"))
-    if pc:
-        lines.append("")
-        lines.append("【主訴】")
-        lines.append(pc)
-
-    # ---- 事前想定 PERMA ----
-    baseline_perma = profile.get("baseline_perma")
-    perma_lines = _format_perma_baseline(baseline_perma, cfg)
-    if perma_lines:
-        lines.append("")
-        lines.append("【事前PERMA想定（0〜10）】")
-        lines.extend(perma_lines)
-
-    # ---- 強み/資源 ----
-    strengths = profile.get("strengths_resources")
-    if isinstance(strengths, list) and strengths:
-        lines.append("")
-        lines.append("【強み/資源】")
-        for s in strengths:
-            st = _safe_str(s)
-            if st:
-                lines.append(f"- {st}")
-
-    # ---- 維持サイクル ----
-    mc = _safe_str(profile.get("maintaining_cycle"))
-    if mc:
-        lines.append("")
-        lines.append("【維持サイクル】")
-        lines.append(mc)
-
-    # ---- セッション目標 ----
-    sg = _safe_str(profile.get("session_goal"))
-    if sg:
-        lines.append("")
-        lines.append("【このセッションの目標】")
-        lines.append(sg)
-
-    # ---- 安全性 ----
-    safety = profile.get("safety")
-    safety = safety if isinstance(safety, dict) else {}
-    if safety:
-        lines.append("")
-        lines.append("【安全性】")
-        ac = safety.get("acute_crisis")
-        si = safety.get("suicidal_ideation")
-        if ac is not None:
-            lines.append(f"- acute_crisis: {bool(ac)}")
-        if si is not None:
-            lines.append(f"- suicidal_ideation: {bool(si)}")
-
-    # ---- 出やすさ特性（trait_expression_*） ----
-    te = profile.get("trait_expression")
-    te_lines = _format_trait_expression(te)
-    if te_lines:
-        lines.append("")
-        lines.append("【発話としての出やすさ特性（-1/0/+1）】")
-        lines.extend(te_lines)
-
-    return "\n".join(lines).strip()
-
-
-def _apply_trait_expression_to_client(client: Any, profile: Dict[str, Any]) -> None:
-    """profile.trait_expression を SimpleClientLLM.internal_state に反映する。"""
-    te = profile.get("trait_expression")
-    if not isinstance(te, dict):
-        return
-
-    internal_state = getattr(client, "internal_state", None)
-    if internal_state is None:
-        return
-
-    for k, v in te.items():
-        if not hasattr(internal_state, str(k)):
-            continue
-        try:
-            setattr(internal_state, str(k), float(v))
-        except Exception:
-            # 数値変換できないものは無視
-            continue
 
 # =========================
 # LLM action classifier (for counselor utterance)
@@ -552,63 +182,36 @@ def main(
 ) -> None:
     api_key = load_openai_api_key()
     phase_cfg = get_model_config(
-        "human_counselor_phase_classifier",
+        "counselor_phase",
         role="counselor",
     )
     action_cfg = get_model_config(
-        "human_counselor_action_classifier",
+        "counselor_action",
         role="counselor",
     )
-    client_cfg = get_model_config("human_counselor_client", role="client")
-    client_state_cfg = get_model_config(
-        "human_counselor_client_state",
-        role="client",
-        fallback_modes=["human_counselor_client"],
-    )
-    client_reply_cfg = get_model_config(
-        "human_counselor_client_reply",
-        role="client",
-        fallback_modes=["human_counselor_client"],
-    )
+    client_llms = build_client_llms(api_key=api_key)
+    client_cfg = client_llms["client_cfg"]
+    client_state_cfg = client_llms["client_state_cfg"]
+    client_reply_cfg = client_llms["client_reply_cfg"]
+    client_llm_state = client_llms["client_llm_state"]
+    client_llm_reply = client_llms["client_llm_reply"]
     # ---- client_profiles.yaml からクライアント特性をロード ----
     client_code = (os.getenv("CLIENT_CODE") or "C01").strip() or "C01"
-    client_profiles_path = _find_client_profiles_path()
-    clients_cfg = _load_client_profiles_yaml(client_profiles_path)
-    client_profile = _get_client_profile(clients_cfg, client_code)
-    derived_meta = _derive_client_meta(client_profile, clients_cfg)
-    scenario = _build_client_scenario_text(client_code, client_profile, clients_cfg, derived_meta)
-
-    # CLIENT_STYLE=auto（既定）のときは interpersonal_style（S1/S2/S3）から推定します。
-    # 例: CLIENT_STYLE=resistant など明示指定があればそれを優先します。
-    client_style = _resolve_client_llm_style(
-        env_style=os.getenv("CLIENT_STYLE", "auto"),
-        interpersonal_style_code=str(client_profile.get("interpersonal_style") or "").strip(),
-    )
-    # 状態変化幅（Noneなら制限なし）
-    client_max_step_env = os.getenv("CLIENT_MAX_STATE_STEP", "none")
-    try:
-        client_max_step = float(client_max_step_env)
-    except (TypeError, ValueError):
-        # "none" などは制限なしとして扱う
-        client_max_step = None
-
     # counselor (labeler) / action classifier / client LLM
     phase_llm = build_llm_from_config(phase_cfg, api_key)
     action_llm = build_llm_from_config(action_cfg, api_key)
-    client_llm_state = build_llm_from_config(client_state_cfg, api_key)
-    client_llm_reply = build_llm_from_config(client_reply_cfg, api_key)
     llm_for_eval = client_llm_reply
 
     # LLMクライアント（会話相手）
-    client = SimpleClientLLM(
+    client, client_bundle = SimpleClientLLM.from_profile(
+        client_code=client_code,
         llm=client_llm_reply,
         llm_state=client_llm_state,
         llm_reply=client_llm_reply,
-        style=client_style,
-        scenario=scenario,
-        max_state_step=client_max_step,
+        env_style=os.getenv("CLIENT_STYLE", "auto"),
+        first_client_utterance_env=os.getenv("FIRST_CLIENT_UTTERANCE"),
+        max_state_step_env=os.getenv("CLIENT_MAX_STATE_STEP", "none"),
     )
-    _apply_trait_expression_to_client(client, client_profile)
 
     # LLMでフェーズ判定（8フェーズ想定。mi_counselor_agent.Phase に依存）
     phase_clf = LLMPhaseClassifier(llm=phase_llm, temperature=0.0, max_history_turns=8)
@@ -627,15 +230,15 @@ def main(
         "client_reasoning_effort": client_reply_cfg.get("reasoning_effort", ""),
         "client_verbosity": client_reply_cfg.get("verbosity", ""),
         "script_name": script_name,
-        "client_style": client_style,
+        "client_style": client_bundle.style,
         "client_code": client_code,
-        "client_pattern": derived_meta.get("pattern_code", ""),
-        "client_pattern_label": derived_meta.get("pattern_label", ""),
-        "client_primary_focus": derived_meta.get("primary_focus_code", ""),
-        "client_primary_focus_label": derived_meta.get("primary_focus_label", ""),
-        "client_interpersonal_style": derived_meta.get("interpersonal_style_code", ""),
-        "client_interpersonal_style_label": derived_meta.get("interpersonal_style_label", ""),
-        "client_profiles_path": str(client_profiles_path),
+        "client_pattern": client_bundle.derived_meta.get("pattern_code", ""),
+        "client_pattern_label": client_bundle.derived_meta.get("pattern_label", ""),
+        "client_primary_focus": client_bundle.derived_meta.get("primary_focus_code", ""),
+        "client_primary_focus_label": client_bundle.derived_meta.get("primary_focus_label", ""),
+        "client_interpersonal_style": client_bundle.derived_meta.get("interpersonal_style_code", ""),
+        "client_interpersonal_style_label": client_bundle.derived_meta.get("interpersonal_style_label", ""),
+        "client_profiles_path": str(client_bundle.profiles_path),
         "planner_config": asdict(cfg),
     }
     env = ManualConversationEnvironment(session_meta=session_meta)
@@ -644,12 +247,7 @@ def main(
     history_pairs: List[Tuple[str, str]] = []
 
     # 初期クライアント発話（デフォルト。必要なら環境変数で上書き）
-    # 初期クライアント発話（優先順位: 1) FIRST_CLIENT_UTTERANCE 2) presenting_concern 3) 既定）
-    first_client_utterance = (
-        os.getenv("FIRST_CLIENT_UTTERANCE")
-        or str(client_profile.get("presenting_concern") or "").strip()
-        or "相談させてください。"
-    )
+    first_client_utterance = client_bundle.first_utterance
 
     env.log.append(ConversationTurn(speaker="client", text=first_client_utterance, meta=None))
     history_pairs.append(("user", first_client_utterance))
