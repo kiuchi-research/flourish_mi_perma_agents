@@ -147,7 +147,7 @@ def build_A_turn_rows_from_logs(logs_dir: str = "logs") -> List[Dict[str, Any]]:
 
             if speaker == "counselor":
                 # この時点で dialogue_lines の末尾は（通常）直前 client
-                phase = (row.get("phase") or "").strip()
+                phase = (row.get("phase") or row.get("phase_predicted") or "").strip()
                 main_action = (row.get("main_action") or "").strip()
                 add_affirm_raw = row.get("add_affirm")
                 add_affirm = str(add_affirm_raw).lower() in ("true", "1", "yes")
@@ -190,7 +190,7 @@ def build_B_phase_rows_from_logs(logs_dir: str = "logs") -> List[Dict[str, Any]]
                 continue
 
             if speaker == "counselor":
-                phase = (row.get("phase") or "").strip()
+                phase = (row.get("phase") or row.get("phase_predicted") or "").strip()
                 if not last_client_text or not phase:
                     prev_phase = phase or prev_phase
                     continue

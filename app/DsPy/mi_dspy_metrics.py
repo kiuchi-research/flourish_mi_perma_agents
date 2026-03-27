@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import dspy
 
-from mi_counselor_agent import MainAction, validate_output
+from mi_counselor_agent import MainAction, coerce_main_action, validate_output
 
 
 # ----------------------------
@@ -55,10 +55,7 @@ def reply_quality_metric(example: dspy.Example, pred: dspy.Prediction, trace=Non
     """
     0.0〜1.0 を返す（trace があるときは bool を返してもよい）
     """
-    try:
-        action = MainAction(str(example.main_action))
-    except Exception:
-        action = MainAction.REFLECT
+    action = coerce_main_action(getattr(example, "main_action", "")) or MainAction.REFLECT
 
     text = str(getattr(pred, "reply", "")).strip()
     ok, reason = validate_output(action, text)
@@ -180,10 +177,11 @@ def score_session_log(session_log: List[Dict[str, Any]]) -> float:
             reflect_streak = 0
 
         # 形式チェック（validate_output）
-        try:
-            ok, _ = validate_output(MainAction(act), text)
-        except Exception:
+        parsed_action = coerce_main_action(act)
+        if parsed_action is None:
             ok = True
+        else:
+            ok, _ = validate_output(parsed_action, text)
         if not ok:
             format_penalty += 0.15
 
@@ -202,14 +200,14 @@ def score_session_log(session_log: List[Dict[str, Any]]) -> float:
 
         if rs >= 0.6:
             n_rs += 1
-            if act in ("REFLECT", "SUMMARY", "ASK_PERMISSION"):
+            if act in ("REFLECT", "SUMMARY", "ASK_PERMISSION_TO_SHARE_INFO"):
                 rs_reward += 1.0
             elif act == "QUESTION":
                 rs_reward += 0.0
             else:
                 rs_reward += 0.5
 
-        if act == "ASK_PERMISSION":
+        if act == "ASK_PERMISSION_TO_SHARE_INFO":
             ask_permission_count += 1
         if act == "PROVIDE_INFO":
             provide_info_count += 1
@@ -244,7 +242,7 @@ def score_session_log(session_log: List[Dict[str, Any]]) -> float:
     if n_rs > 0:
         score += 0.10 * (rs_reward / n_rs)
 
-    # 情報提供があるなら、ASK_PERMISSION が一度もないのはペナルティ
+    # 情報提供があるなら、ASK_PERMISSION_TO_SHARE_INFO が一度もないのはペナルティ
     if provide_info_count > 0 and ask_permission_count == 0:
         score -= 0.10
 

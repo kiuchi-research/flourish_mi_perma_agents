@@ -27,8 +27,9 @@ from mi_counselor_agent import (
     classify_phase_heuristic,
     decide_affirm,
     extract_features,
-    plan_next_action,
+    compute_allowed_actions,
     validate_output,
+    coerce_main_action,
 )
 
 # ----------------------------
@@ -46,7 +47,7 @@ ActionLabel = Literal[
     "REFLECT",
     "QUESTION",
     "SUMMARY",
-    "ASK_PERMISSION",
+    "ASK_PERMISSION_TO_SHARE_INFO",
     "PROVIDE_INFO",
 ]
 
@@ -69,7 +70,7 @@ class MIReplySignature(dspy.Signature):
     - REFLECT: 質問記号「?」「？」を入れない（断定しすぎず言い換える）
     - QUESTION: 質問は1つまで。文末は疑問形（？/ですか/でしょうか）
     - SUMMARY: 要点を短くまとめる。必要なら最後に確認の問いを1つまで
-    - ASK_PERMISSION: 情報共有の前に許可を取る（短く、最後は疑問形）
+    - ASK_PERMISSION_TO_SHARE_INFO: 情報共有の前に許可を取る（短く、最後は疑問形）
     - PROVIDE_INFO: 中立に短く情報提示し、最後に反応を尋ねる質問を1つ
     """
 
@@ -180,13 +181,13 @@ class MIChangeTalkResistanceProgram(dspy.Module):
 
 
 # ----------------------------
-# C: 行動ランキング（plan_next_action の llm_rank_bias に渡す）
+# C: 行動ランキング
 # ----------------------------
 class MIActionRankSignature(dspy.Signature):
     """
     状態・特徴量を見て、次に優先したい主動作を上位3つ返してください（順番が重要）。
 
-    返す値は REFLECT/QUESTION/SUMMARY/ASK_PERMISSION/PROVIDE_INFO のいずれか。
+    返す値は REFLECT/QUESTION/SUMMARY/ASK_PERMISSION_TO_SHARE_INFO/PROVIDE_INFO のいずれか。
     """
 
     user_text: str = dspy.InputField(desc="クライアント発話（最新）")
@@ -274,10 +275,10 @@ def _unique_ranked_actions(rank1: str, rank2: str, rank3: str) -> List[MainActio
         if r in seen:
             continue
         seen.add(r)
-        try:
-            out.append(MainAction(r))
-        except ValueError:
+        parsed = coerce_main_action(r)
+        if parsed is None:
             continue
+        out.append(parsed)
     return out
 
 
@@ -359,8 +360,8 @@ class MISessionDriverProgram(dspy.Module):
         if state.info_mode == InfoMode.WAITING_PERMISSION and features.has_permission is False:
             state.info_mode = InfoMode.NONE
 
-        # 4) 行動選択（Cを使うなら action_ranker → llm_rank_bias で誘導）
-        llm_rank_bias: Optional[List[MainAction]] = None
+        # 4) 行動選択（ranker出力を action mask で強制採用）
+        ranker_actions: List[MainAction] = []
         if self.action_ranker is not None:
             pr = self.action_ranker(
                 user_text=user_text,
@@ -375,32 +376,52 @@ class MISessionDriverProgram(dspy.Module):
                 user_is_question=features.user_is_question,
                 user_requests_info=features.user_requests_info,
             )
-            llm_rank_bias = _unique_ranked_actions(pr.rank1, pr.rank2, pr.rank3)
+            ranker_actions = _unique_ranked_actions(pr.rank1, pr.rank2, pr.rank3)
 
-        action, debug = plan_next_action(
+        action_mask = compute_allowed_actions(
             state=state,
             features=features,
             cfg=self.cfg,
-            llm_rank_bias=llm_rank_bias,
         )
-
-        # permissionが得られたなら情報共有へ
-        if state.info_mode == InfoMode.WAITING_PERMISSION and features.has_permission is True:
-            state.info_mode = InfoMode.READY_TO_PROVIDE
-            action = MainAction.PROVIDE_INFO
+        allowed_actions = action_mask.get("allowed_actions") or [MainAction.REFLECT_COMPLEX]
+        allowed_set = set(allowed_actions)
+        fallback_action = allowed_actions[0]
+        ranker_candidate = ranker_actions[0] if ranker_actions else None
+        if ranker_candidate in allowed_set:
+            action = ranker_candidate
+            debug = {
+                "action_source": "ranker_masked_directive",
+                "ranker_proposal_applied": ranker_candidate.value.lower(),
+                "allowed_actions": [a.value for a in allowed_actions],
+                "action_mask": action_mask,
+            }
+        else:
+            action = fallback_action
+            debug = {
+                "action_source": "allowed_action_mask_fallback",
+                "ranker_proposal_applied": (
+                    "no_ranker_action_fallback"
+                    if ranker_candidate is None
+                    else "fallback_to_allowed_head"
+                ),
+                "invalid_action": ranker_candidate is not None,
+                "invalid_ranker_action": ranker_candidate.value if ranker_candidate else None,
+                "allowed_actions": [a.value for a in allowed_actions],
+                "action_mask": action_mask,
+            }
 
         # 5) 是認の付加
-        add_affirm = decide_affirm(features, state)
+        add_affirm_mode = decide_affirm(features, state, user_text)
 
         # 6) 次状態（このターンの想定更新）
         next_state = apply_action_to_state(
-            state=state, features=features, action=action, add_affirm=add_affirm
+            state=state, features=features, action=action, add_affirm=add_affirm_mode
         )
 
         decision = Decision(
             phase=state.phase,
             main_action=action,
-            add_affirm=add_affirm,
+            add_affirm=add_affirm_mode,
             next_state=next_state,
             debug={"features": asdict(features), **debug},
         )
@@ -411,7 +432,7 @@ class MISessionDriverProgram(dspy.Module):
             dialogue=dialogue,
             phase=_to_phase_label(state.phase),
             main_action=action.value,  # type: ignore[arg-type]
-            add_affirm=add_affirm,
+            add_affirm=bool(add_affirm_mode),
         )
         reply = str(pred3.reply).strip()
 
@@ -421,7 +442,7 @@ class MISessionDriverProgram(dspy.Module):
                 dialogue=dialogue,
                 phase=_to_phase_label(state.phase),
                 main_action=action.value,  # type: ignore[arg-type]
-                add_affirm=add_affirm,
+                add_affirm=bool(add_affirm_mode),
                 bad_reply=reply,
                 violation_reason=reason,
             )

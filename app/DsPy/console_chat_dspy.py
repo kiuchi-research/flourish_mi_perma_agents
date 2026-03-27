@@ -47,6 +47,9 @@ def main():
             break
 
         reply = env.step_with_human(user_text)
+        if env.session_meta.get("session_ended"):
+            print("セッション終了条件を満たしたため終了します。")
+            break
         print("Counselor:", reply)
         print("---")
 

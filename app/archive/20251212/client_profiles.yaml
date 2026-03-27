@@ -1,0 +1,435 @@
+schema_version: "1.0"
+
+scales:
+  perma:
+    description: "0=非常に低い, 10=非常に高い（事前の想定）"
+    min: 0
+    max: 10
+  trait_expression:
+    description: "-1=出にくい, 0=標準, +1=出やすい（発話としての出やすさ）"
+    allowed_values: [-1, 0, 1]
+
+definitions:
+  perma:
+    P: "Positive emotion（肯定感情）"
+    E: "Engagement（没頭）"
+    R: "Relationships（関係性）"
+    M: "Meaning（意味）"
+    A: "Accomplishment（達成）"
+  interpersonal_styles:
+    S1:
+      label: "内省・協力型"
+      brief: "感情や考えを言語化しようとし、質問に比較的素直に答える"
+    S2:
+      label: "防衛・懐疑型"
+      brief: "早期は開示が少なく、提案や意味づけに懐疑的になりやすい"
+    S3:
+      label: "助言志向・せっかち型"
+      brief: "結論や打ち手を早く求め、長い探索質問に焦れやすい"
+  perma_focus_patterns:
+    M1:
+      label: "Meaning（意味）低下"
+      primary_focus: "M"
+    R1:
+      label: "Relationships（関係）摩耗/孤立"
+      primary_focus: "R"
+    A1:
+      label: "Accomplishment（達成）停滞/自己効力感低下"
+      primary_focus: "A"
+    P1:
+      label: "Positive emotion不足/ストレス過多"
+      primary_focus: "P"
+    E1:
+      label: "Engagement低下/注意散漫（スマホ等）"
+      primary_focus: "E"
+
+clients:
+  C01:
+    pattern: "M1"
+    interpersonal_style: "S1"
+    background:
+      age_range: "30代前半"
+      occupation_context: "会社員"
+      living_situation: "同居"
+      notes: null
+    presenting_concern: "仕事が回っても「何のため感」が強い"
+    baseline_perma: { P: 3, E: 4, R: 6, M: 2, A: 6 }
+    strengths_resources:
+      - "誠実で、話を整理しようとする"
+      - "関係資源は一定ある"
+    maintaining_cycle: "忙しい→考える余白なし→虚しさ→惰性"
+    session_goal: "価値（大事にしたいこと）を言語化して一歩決めたい"
+    safety:
+      acute_crisis: false
+      suicidal_ideation: false
+    trait_expression:
+      trait_expression_pos: 0.0
+      trait_expression_neg: 1.0
+      trait_expression_importance: 1.0
+      trait_expression_confidence: 0.0
+      trait_expression_like: 1.0
+      trait_expression_tension: 0.0
+
+  C02:
+    pattern: "M1"
+    interpersonal_style: "S2"
+    background:
+      age_range: "20代後半"
+      occupation_context: "専門職"
+      living_situation: "独居"
+      notes: null
+    presenting_concern: "「意味とか言われても綺麗事に感じる」"
+    baseline_perma: { P: 4, E: 5, R: 4, M: 2, A: 7 }
+    strengths_resources:
+      - "現実検討力がある（納得できれば動ける）"
+      - "成果を出す力はある"
+    maintaining_cycle: "意味の話を避ける→目標が外的評価だけ→空虚"
+    session_goal: "現実的に納得できる“続ける理由”の整理"
+    safety:
+      acute_crisis: false
+      suicidal_ideation: false
+    trait_expression:
+      trait_expression_pos: -1.0
+      trait_expression_neg: 1.0
+      trait_expression_importance: -1.0
+      trait_expression_confidence: 1.0
+      trait_expression_like: -1.0
+      trait_expression_tension: -1.0
+
+  C03:
+    pattern: "M1"
+    interpersonal_style: "S3"
+    background:
+      age_range: "40代前半"
+      occupation_context: "管理職"
+      living_situation: "家族あり"
+      notes: null
+    presenting_concern: "価値観は分からないので「今すぐ効く打ち手」が欲しい"
+    baseline_perma: { P: 3, E: 3, R: 5, M: 2, A: 5 }
+    strengths_resources:
+      - "意思決定が速い"
+      - "実行力はある（方向が定まれば動く）"
+    maintaining_cycle: "成果で埋める→疲労→さらに意味が薄れる"
+    session_goal: "今週できる短い行動計画（意味に繋がる行動）"
+    safety:
+      acute_crisis: false
+      suicidal_ideation: false
+    trait_expression:
+      trait_expression_pos: 0.0
+      trait_expression_neg: 1.0
+      trait_expression_importance: 1.0
+      trait_expression_confidence: 1.0
+      trait_expression_like: 0.0
+      trait_expression_tension: 1.0
+
+  C04:
+    pattern: "R1"
+    interpersonal_style: "S1"
+    background:
+      age_range: "30代後半"
+      occupation_context: "在宅中心"
+      living_situation: "独居"
+      notes: null
+    presenting_concern: "人と会話が減り、孤立感が強い"
+    baseline_perma: { P: 3, E: 4, R: 2, M: 5, A: 5 }
+    strengths_resources:
+      - "関係を大事にしたい気持ちはある"
+      - "小さな行動なら試せる"
+    maintaining_cycle: "疲れる→誘い断る→孤立→気力低下"
+    session_goal: "負担が小さい“つながり行動”を設計したい"
+    safety:
+      acute_crisis: false
+      suicidal_ideation: false
+    trait_expression:
+      trait_expression_pos: 1.0
+      trait_expression_neg: 1.0
+      trait_expression_importance: 1.0
+      trait_expression_confidence: 0.0
+      trait_expression_like: 1.0
+      trait_expression_tension: 0.0
+
+  C05:
+    pattern: "R1"
+    interpersonal_style: "S2"
+    background:
+      age_range: "20代後半"
+      occupation_context: "職場で摩擦"
+      living_situation: "同居"
+      notes: null
+    presenting_concern: "人間関係は「どうせ変わらない」と諦め"
+    baseline_perma: { P: 4, E: 5, R: 2, M: 4, A: 6 }
+    strengths_resources:
+      - "観察眼がある（状況はよく見ている）"
+      - "自衛の感覚が働く"
+    maintaining_cycle: "不信→距離→誤解→さらに不信"
+    session_goal: "最低限の関係コストで消耗を減らしたい（境界線）"
+    safety:
+      acute_crisis: false
+      suicidal_ideation: false
+    trait_expression:
+      trait_expression_pos: -1.0
+      trait_expression_neg: 1.0
+      trait_expression_importance: -1.0
+      trait_expression_confidence: 1.0
+      trait_expression_like: -1.0
+      trait_expression_tension: 1.0
+
+  C06:
+    pattern: "R1"
+    interpersonal_style: "S3"
+    background:
+      age_range: "40代後半"
+      occupation_context: "対人業務"
+      living_situation: "家族あり"
+      notes: null
+    presenting_concern: "職場での“断り方”を具体的に練習したい"
+    baseline_perma: { P: 3, E: 4, R: 3, M: 5, A: 6 }
+    strengths_resources:
+      - "実務対応の経験がある"
+      - "具体策を実行しやすい"
+    maintaining_cycle: "頼まれる→抱える→イライラ→関係悪化"
+    session_goal: "次に使う短い言い回し・対応手順"
+    safety:
+      acute_crisis: false
+      suicidal_ideation: false
+    trait_expression:
+      trait_expression_pos: 0.0
+      trait_expression_neg: 1.0
+      trait_expression_importance: 1.0
+      trait_expression_confidence: 1.0
+      trait_expression_like: 0.0
+      trait_expression_tension: 1.0
+
+  C07:
+    pattern: "A1"
+    interpersonal_style: "S1"
+    background:
+      age_range: "20代後半"
+      occupation_context: "学習/資格挑戦中"
+      living_situation: null
+      notes: null
+    presenting_concern: "やる気はあるのに続かず自己嫌悪"
+    baseline_perma: { P: 3, E: 3, R: 5, M: 4, A: 2 }
+    strengths_resources:
+      - "改善意欲がある"
+      - "振り返りはできる"
+    maintaining_cycle: "先延ばし→罪悪感→回避"
+    session_goal: "小さな達成が出る設計（超小目標）"
+    safety:
+      acute_crisis: false
+      suicidal_ideation: false
+    trait_expression:
+      trait_expression_pos: -1.0
+      trait_expression_neg: 1.0
+      trait_expression_importance: 1.0
+      trait_expression_confidence: -1.0
+      trait_expression_like: 1.0
+      trait_expression_tension: 0.0
+
+  C08:
+    pattern: "A1"
+    interpersonal_style: "S2"
+    background:
+      age_range: "30代後半"
+      occupation_context: "成果評価の職場"
+      living_situation: null
+      notes: null
+    presenting_concern: "「モチベ論は苦手。仕組みで何とかしたい」"
+    baseline_perma: { P: 4, E: 4, R: 4, M: 4, A: 3 }
+    strengths_resources:
+      - "合理的に考えられる"
+      - "ルール化・仕組み化が得意"
+    maintaining_cycle: "完璧主義→着手困難→停滞"
+    session_goal: "失敗コストを下げる着手ルール（実験として）"
+    safety:
+      acute_crisis: false
+      suicidal_ideation: false
+    trait_expression:
+      trait_expression_pos: -1.0
+      trait_expression_neg: 0.0
+      trait_expression_importance: 1.0
+      trait_expression_confidence: 0.0
+      trait_expression_like: -1.0
+      trait_expression_tension: -1.0
+
+  C09:
+    pattern: "A1"
+    interpersonal_style: "S3"
+    background:
+      age_range: "40代前半"
+      occupation_context: "副業含め多忙"
+      living_situation: null
+      notes: null
+    presenting_concern: "タスク管理が崩壊、達成感ゼロ"
+    baseline_perma: { P: 2, E: 3, R: 5, M: 3, A: 2 }
+    strengths_resources:
+      - "やるべきことの量は把握している"
+      - "必要ならやり切る力はある"
+    maintaining_cycle: "詰め込み→破綻→自己否定"
+    session_goal: "優先順位と“やらないこと”を決める"
+    safety:
+      acute_crisis: false
+      suicidal_ideation: false
+    trait_expression:
+      trait_expression_pos: -1.0
+      trait_expression_neg: 1.0
+      trait_expression_importance: 1.0
+      trait_expression_confidence: 0.0
+      trait_expression_like: 0.0
+      trait_expression_tension: 1.0
+
+  C10:
+    pattern: "P1"
+    interpersonal_style: "S1"
+    background:
+      age_range: "30代前半"
+      occupation_context: "睡眠が浅い"
+      living_situation: null
+      notes: null
+    presenting_concern: "不安が抜けず、余裕がない"
+    baseline_perma: { P: 2, E: 4, R: 5, M: 4, A: 5 }
+    strengths_resources:
+      - "変化を試す意欲がある"
+      - "言語化が比較的できる"
+    maintaining_cycle: "不安→過剰準備→疲労→さらに不安"
+    session_goal: "短時間でできる情動調整（落ち着く手順）"
+    safety:
+      acute_crisis: false
+      suicidal_ideation: false
+    trait_expression:
+      trait_expression_pos: -1.0
+      trait_expression_neg: 1.0
+      trait_expression_importance: 0.0
+      trait_expression_confidence: -1.0
+      trait_expression_like: 1.0
+      trait_expression_tension: 1.0
+
+  C11:
+    pattern: "P1"
+    interpersonal_style: "S2"
+    background:
+      age_range: "40代後半"
+      occupation_context: "ストレス高いが弱音は吐かない"
+      living_situation: null
+      notes: null
+    presenting_concern: "イライラが増えたが、気合で乗り切ろうとしている"
+    baseline_perma: { P: 2, E: 5, R: 4, M: 4, A: 6 }
+    strengths_resources:
+      - "責任感が強い"
+      - "粘り強さはある"
+    maintaining_cycle: "抑える→爆発→自己嫌悪"
+    session_goal: "現実的で再現性のある“クールダウン法”"
+    safety:
+      acute_crisis: false
+      suicidal_ideation: false
+    trait_expression:
+      trait_expression_pos: -1.0
+      trait_expression_neg: -1.0
+      trait_expression_importance: 0.0
+      trait_expression_confidence: 1.0
+      trait_expression_like: -1.0
+      trait_expression_tension: 1.0
+
+  C12:
+    pattern: "P1"
+    interpersonal_style: "S3"
+    background:
+      age_range: "20代後半"
+      occupation_context: "生活リズムが崩れ気味"
+      living_situation: null
+      notes: null
+    presenting_concern: "ストレス対処を「手順化してほしい」"
+    baseline_perma: { P: 3, E: 3, R: 6, M: 4, A: 4 }
+    strengths_resources:
+      - "具体策があると動きやすい"
+      - "改善したい意欲はある"
+    maintaining_cycle: "夜更かし→疲労→感情が荒れる"
+    session_goal: "1日5分のルーチン案（睡眠前など）"
+    safety:
+      acute_crisis: false
+      suicidal_ideation: false
+    trait_expression:
+      trait_expression_pos: 0.0
+      trait_expression_neg: 1.0
+      trait_expression_importance: 1.0
+      trait_expression_confidence: 0.0
+      trait_expression_like: 0.0
+      trait_expression_tension: 1.0
+
+  C13:
+    pattern: "E1"
+    interpersonal_style: "S1"
+    background:
+      age_range: "30代後半"
+      occupation_context: "集中が続かない"
+      living_situation: null
+      notes: null
+    presenting_concern: "スマホで時間が溶け、自己評価が下がる"
+    baseline_perma: { P: 3, E: 2, R: 5, M: 4, A: 3 }
+    strengths_resources:
+      - "前向きな面も言語化できる"
+      - "環境調整を試せる"
+    maintaining_cycle: "逃避→後悔→さらに逃避"
+    session_goal: "環境調整＋小さな没頭経験を作りたい"
+    safety:
+      acute_crisis: false
+      suicidal_ideation: false
+    trait_expression:
+      trait_expression_pos: 1.0
+      trait_expression_neg: 0.0
+      trait_expression_importance: 0.0
+      trait_expression_confidence: 0.0
+      trait_expression_like: 1.0
+      trait_expression_tension: 0.0
+
+  C14:
+    pattern: "E1"
+    interpersonal_style: "S2"
+    background:
+      age_range: "20代後半"
+      occupation_context: "情報収集癖"
+      living_situation: null
+      notes: null
+    presenting_concern: "「スマホが悪いのは分かるが、必要でもある」"
+    baseline_perma: { P: 4, E: 2, R: 4, M: 4, A: 4 }
+    strengths_resources:
+      - "自己観察はできる（問題の認識はある）"
+      - "合理性を重視する"
+    maintaining_cycle: "通知→中断→進まない→自己嫌悪"
+    session_goal: "現実的なルール（ゼロにしない設計）"
+    safety:
+      acute_crisis: false
+      suicidal_ideation: false
+    trait_expression:
+      trait_expression_pos: -1.0
+      trait_expression_neg: -1.0
+      trait_expression_importance: 0.0
+      trait_expression_confidence: 1.0
+      trait_expression_like: -1.0
+      trait_expression_tension: 0.0
+
+  C15:
+    pattern: "E1"
+    interpersonal_style: "S3"
+    background:
+      age_range: "40代前半"
+      occupation_context: "在宅/締切に追われる"
+      living_situation: null
+      notes: null
+    presenting_concern: "集中のスイッチを作りたい（具体策が欲しい）"
+    baseline_perma: { P: 3, E: 2, R: 5, M: 3, A: 4 }
+    strengths_resources:
+      - "締切前は動ける（火事場の実行力）"
+      - "手順があると実行しやすい"
+    maintaining_cycle: "締切直前だけ火事場→燃え尽き"
+    session_goal: "開始儀式（5分）＋中断対策（if-then）"
+    safety:
+      acute_crisis: false
+      suicidal_ideation: false
+    trait_expression:
+      trait_expression_pos: 0.0
+      trait_expression_neg: 1.0
+      trait_expression_importance: 1.0
+      trait_expression_confidence: 1.0
+      trait_expression_like: 0.0
+      trait_expression_tension: 1.0

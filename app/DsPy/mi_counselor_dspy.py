@@ -34,8 +34,10 @@ def configure_dspy_lm(model: str = "openai/gpt-4o-mini") -> None:
     DSPy の LM を設定します。
     OPENAI_API_KEY は .env または環境変数から読み取ります。
     """
-    # 既存プロジェクトに合わせて ../.env を読む
-    env_path = Path(__file__).resolve().parent.parent / ".env"
+    app_dir = Path(__file__).resolve().parent.parent
+    env_path = app_dir / ".env"
+    if not env_path.exists():
+        env_path = app_dir.parent / ".env"
     load_dotenv(dotenv_path=env_path)
 
     # dspy.LM は環境変数 OPENAI_API_KEY を読むので、ここでは存在チェックだけ

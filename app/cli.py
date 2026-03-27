@@ -3,15 +3,24 @@ from __future__ import annotations
 import argparse
 import os
 import subprocess
+import sys
 from dataclasses import asdict
 from pathlib import Path
 import site
 from typing import Any, Dict, Optional
 
-from conversation_environment import ConversationEnvironment, ConversationTurn
+from app_paths import PROJECT_ROOT, resolve_env_path
+
+SRC_DIR = PROJECT_ROOT / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+from mi_sim.cli import run_self_play as _run_self_play_package
+from mi_sim.cli import run_self_play_batch as _run_self_play_batch_package
+from conversation_environment import ConversationEnvironment
+from dotenv import load_dotenv
 from env_utils import load_openai_api_key
-from perma_client_agent import DEFAULT_FIRST_CLIENT_UTTERANCE, SimpleClientLLM
-from client_llm_loader import build_client_llms
+from perma_client_agent import DEFAULT_FIRST_CLIENT_UTTERANCE
 from session_log_tools import finalize_session
 from counselor_llm_loader import build_counselor_stack
 
@@ -38,17 +47,21 @@ def _format_phase_debug(debug: Dict[str, Any]) -> str:
 def _format_action_debug(debug: Dict[str, Any]) -> str:
     """主動作選択の簡易要約を作る。"""
     sampling = debug.get("sampling")
-    llm_bias = debug.get("llm_rank_bias") or []
+    action_source = str(debug.get("action_source") or "")
     ranker_debug = debug.get("ranker_debug") or {}
     risk_level = debug.get("risk_level")
     if sampling == "crisis_override":
         return f"危機優先(risk={risk_level})"
     if ranker_debug.get("error"):
         return f"ranker_error={ranker_debug.get('error')}"
-    if sampling in ("argmax", "stochastic"):
-        bias = ", ".join(llm_bias) if llm_bias else "-"
-        bias_part = f"LLMバイアス={bias}" if llm_bias else "LLMバイアスなし"
-        return f"ルール決定({sampling}; {bias_part})"
+    if action_source == "ranker_masked_directive":
+        applied = debug.get("ranker_proposal_applied") or debug.get("ranker_directive_main_action") or "-"
+        return f"ranker確定採用(mask内:{applied})"
+    if action_source in {"allowed_action_mask_fallback", "mask_rule_fallback"}:
+        applied = debug.get("ranker_proposal_applied") or "-"
+        return f"maskフォールバック({applied})"
+    if sampling:
+        return f"ルール決定({sampling})"
     return sampling or "rule"
 
 
@@ -73,6 +86,15 @@ def _format_evaluation_debug(debug: Dict[str, Any]) -> str:
     return " / ".join(parts) if parts else "評価情報なし"
 
 
+def _format_affirm_status(value: Any) -> str:
+    raw = str(value or "").strip().upper()
+    if raw in {"COMPLEX"}:
+        return "複雑是認"
+    if raw in {"SIMPLE", "TRUE", "1"}:
+        return "単純是認"
+    return "是認なし"
+
+
 # ==============================
 # conda 環境チェック（人間クライアント CLI 用）
 # ==============================
@@ -80,12 +102,11 @@ def _format_evaluation_debug(debug: Dict[str, Any]) -> str:
 def _find_python_venv_candidates(env_name: str) -> list[Path]:
     """conda が無い場合に使えそうな Python 仮想環境パス候補を列挙する。"""
     name = env_name or "py-dspy"
-    root = Path(__file__).resolve().parent.parent
     cwd = Path.cwd()
     home = Path.home()
     candidates = [
-        root / ".venv" / name,
-        root / ".venv",
+        PROJECT_ROOT / ".venv" / name,
+        PROJECT_ROOT / ".venv",
         cwd / ".venv" / name,
         cwd / ".venv",
         home / ".venv" / name,
@@ -244,15 +265,15 @@ def run_human_client_counselor_cli(
     counselor = counselor_stack["counselor"]
     llm = counselor_stack["llm"]
     counselor_cfg = counselor_stack["counselor_cfg"]
-    counselor_phase_cfg = counselor_stack["phase_cfg"]
+    counselor_slot_fill_cfg = counselor_stack.get("slot_fill_cfg", {})
     counselor_action_cfg = counselor_stack["action_cfg"]
     risk_detector_cfg = counselor_stack["risk_cfg"]
     mi_evaluator_cfg = counselor_stack["mi_eval_cfg"]
-    counselor.phase_confidence_threshold = 0.3
     session_meta = {
         "session_mode": "human_client",
         "openai_model": counselor_cfg.get("model", ""),
-        "phase_classifier_model": counselor_phase_cfg.get("model", "") if counselor_phase_cfg.get("enabled") else "",
+        "reasoning_effort": counselor_cfg.get("reasoning_effort", ""),
+        "phase_slot_filler_model": counselor_slot_fill_cfg.get("model", "") if counselor_slot_fill_cfg.get("enabled") else "",
         "action_ranker_model": counselor_action_cfg.get("model", "") if counselor_action_cfg.get("enabled") else "",
         "risk_detector_model": risk_detector_cfg.get("model", "") if risk_detector_cfg.get("enabled") else "",
         "mi_evaluator_model": mi_evaluator_cfg.get("model", "") if mi_evaluator_cfg.get("enabled") else "",
@@ -275,6 +296,17 @@ def run_human_client_counselor_cli(
             break
 
         reply = env.step_with_human(user_text)
+        if env.session_meta.get("session_ended"):
+            condition = env.session_meta.get("session_end_condition") or {}
+            phase_text = condition.get("phase", "")
+            phase_intent_text = condition.get("phase_intent_effective", "")
+            reason_text = env.session_meta.get("session_end_reason", "session_end_triggered")
+            print("セッション終了条件を満たしたため終了します。")
+            print(
+                f"  理由: {reason_text} "
+                f"(phase={phase_text}, phase_intent={phase_intent_text})"
+            )
+            break
         print("Counselor:", reply)
         counselor_meta = env.log[-1].meta or {}
         debug = counselor_meta.get("debug") or {}
@@ -284,7 +316,7 @@ def run_human_client_counselor_cli(
         phase_debug = debug.get("phase_debug") or {}
         print("判定結果:")
         print(f"  フェーズ判定: {phase_text} ({_format_phase_debug(phase_debug)})")
-        affirm_status = "是認あり" if add_affirm else "是認なし"
+        affirm_status = _format_affirm_status(add_affirm)
         print(f"  行動判定: {action_text} ({affirm_status}; {_format_action_debug(debug)})")
         print(f"  応答判定: {_format_evaluation_debug(debug)}")
         print("---")
@@ -296,90 +328,63 @@ def run_human_client_counselor_cli(
 # サブコマンド: 自己対話シミュレーション
 # ==============================
 
-def _print_simulation_log(log: List[ConversationTurn]) -> None:
-    for idx, turn in enumerate(log):
-        prefix = "C" if turn.speaker == "client" else "T"
-        print(f"[{idx:02d}] {prefix}: {turn.text}")
-        if turn.meta and turn.speaker == "counselor":
-            phase = turn.meta.get("phase")
-            action = turn.meta.get("main_action")
-            print(f"      meta: phase={phase}, action={action}")
-
-
 def run_agent_dual_simulation(
     *,
     script_name: str = "agent_dual_simulation",
     # 人間カウンセラー側と同じ初期発話生成ロジックに統一
     first_client_utterance: str = DEFAULT_FIRST_CLIENT_UTTERANCE,
-    max_turns: int = 5,
+    max_turns: int = 15,
+    max_turns_completion: str = "phase_to_closing",
+    max_total_turns: Optional[int] = None,
     conda_env: Optional[str] = "py-dspy",
+    client_style: Optional[str] = None,
+    client_code: Optional[str] = None,
+    logs_dir: Optional[Path] = None,
+    log_prefix: str = "session_simulation",
+    artifact_id: Optional[str] = None,
+    print_full_log: bool = True,
+) -> Dict[str, str]:
+    if conda_env:
+        check_and_activate_conda_env(conda_env)
+    resolved_logs_dir = logs_dir or (Path(__file__).resolve().parent / "logs")
+    return _run_self_play_package(
+        script_name=script_name,
+        first_client_utterance=first_client_utterance,
+        max_turns=max_turns,
+        max_turns_completion=max_turns_completion,
+        max_total_turns=max_total_turns,
+        client_style=client_style,
+        client_code=client_code,
+        logs_dir=resolved_logs_dir,
+        log_prefix=log_prefix,
+        artifact_id=artifact_id,
+        print_full_log=print_full_log,
+    )
+
+
+def run_agent_dual_simulation_batch(
+    *,
+    script_name: str = "agent_dual_simulation_batch",
+    first_client_utterance: str = DEFAULT_FIRST_CLIENT_UTTERANCE,
+    max_turns: int = 15,
+    max_turns_completion: str = "phase_to_closing",
+    max_total_turns: Optional[int] = None,
+    conda_env: Optional[str] = "py-dspy",
+    client_style: Optional[str] = None,
+    logs_dir: Optional[Path] = None,
 ) -> None:
     if conda_env:
         check_and_activate_conda_env(conda_env)
-    api_key = load_openai_api_key()
-    counselor_mode = os.getenv("COUNSELOR_MODE", "counselor_llm")
-    counselor_stack = build_counselor_stack(api_key=api_key)
-    counselor = counselor_stack["counselor"]
-    counselor_llm = counselor_stack["llm"]
-    counselor_cfg = counselor_stack["counselor_cfg"]
-    counselor_phase_cfg = counselor_stack["phase_cfg"]
-    counselor_action_cfg = counselor_stack["action_cfg"]
-    risk_detector_cfg = counselor_stack["risk_cfg"]
-    mi_evaluator_cfg = counselor_stack["mi_eval_cfg"]
-    client_llms = build_client_llms(api_key=api_key)
-    client_cfg = client_llms["client_cfg"]
-    client_state_cfg = client_llms["client_state_cfg"]
-    client_reply_cfg = client_llms["client_reply_cfg"]
-    client_llm_state = client_llms["client_llm_state"]
-    client_llm_reply = client_llms["client_llm_reply"]
-    counselor.phase_confidence_threshold = 0.3
-    client_code = (os.getenv("CLIENT_CODE") or "C01").strip() or "C01"
-    client, client_bundle = SimpleClientLLM.from_profile(
-        client_code=client_code,
-        llm=client_llm_reply,
-        llm_state=client_llm_state,
-        llm_reply=client_llm_reply,
-        env_style=os.getenv("CLIENT_STYLE", "auto"),
-        first_client_utterance_env=os.getenv("FIRST_CLIENT_UTTERANCE"),
-        max_state_step_env=os.getenv("CLIENT_MAX_STATE_STEP", "none"),
-        default_first_utterance=first_client_utterance,
-    )
-    session_meta = {
-        "session_mode": "self_play",
-        "openai_model": counselor_cfg.get("model", ""),
-        "script_name": script_name,
-        "client_style": client_bundle.style,
-        "client_code": client_code,
-        "client_pattern": client_bundle.derived_meta.get("pattern_code", ""),
-        "client_pattern_label": client_bundle.derived_meta.get("pattern_label", ""),
-        "client_primary_focus": client_bundle.derived_meta.get("primary_focus_code", ""),
-        "client_primary_focus_label": client_bundle.derived_meta.get("primary_focus_label", ""),
-        "client_interpersonal_style": client_bundle.derived_meta.get("interpersonal_style_code", ""),
-        "client_interpersonal_style_label": client_bundle.derived_meta.get("interpersonal_style_label", ""),
-        "client_profiles_path": str(client_bundle.profiles_path),
-        "client_model_state": client_state_cfg.get("model", ""),
-        "client_model_reply": client_reply_cfg.get("model", ""),
-        "phase_classifier_model": counselor_phase_cfg.get("model", "") if counselor_phase_cfg.get("enabled") else "",
-        "action_ranker_model": counselor_action_cfg.get("model", "") if counselor_action_cfg.get("enabled") else "",
-        "risk_detector_model": risk_detector_cfg.get("model", "") if risk_detector_cfg.get("enabled") else "",
-        "mi_evaluator_model": mi_evaluator_cfg.get("model", "") if mi_evaluator_cfg.get("enabled") else "",
-        "counselor_mode": counselor_mode,
-        "planner_config": asdict(counselor.cfg),
-    }
-    env = ConversationEnvironment(counselor=counselor, client=client, session_meta=session_meta)
-    env.reset()
-
-    print("自己対話シミュレーションを開始します...")
-    env.simulate(
-        first_client_utterance=client_bundle.first_utterance,
+    resolved_logs_dir = logs_dir or (Path(__file__).resolve().parent / "logs" / "self_play_batch")
+    _run_self_play_batch_package(
+        script_name=script_name,
+        first_client_utterance=first_client_utterance,
         max_turns=max_turns,
-        progress=True,
+        max_turns_completion=max_turns_completion,
+        max_total_turns=max_total_turns,
+        client_style=client_style,
+        logs_dir=resolved_logs_dir,
     )
-    print("シミュレーション完了。ログを出力します。")
-
-    print("\n==== SIMULATION LOG ====")
-    _print_simulation_log(env.log)
-    finalize_session(env, counselor_llm, log_prefix="session_simulation")
 
 
 # ==============================
@@ -406,6 +411,8 @@ def run_human_counselor_client_cli(
 # ==============================
 
 def main() -> None:
+    # app/.env を優先し、未配置なら従来のルート .env も使えるようにする。
+    load_dotenv(dotenv_path=resolve_env_path())
     parser = argparse.ArgumentParser(description="MI Bot CLI entrypoint (human-client/self-play/human-counselor)")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -414,7 +421,40 @@ def main() -> None:
 
     self_play = sub.add_parser("self-play", help="LLM同士の自己対話シミュレーション")
     self_play.add_argument("--max-turns", type=int, default=5, help="カウンセラー→クライアントのターン数")
+    self_play.add_argument(
+        "--max-turns-completion",
+        choices=["hard_stop", "phase_to_closing"],
+        default="phase_to_closing",
+        help="max-turns 到達後の終了方式（既定: phase_to_closing）",
+    )
+    self_play.add_argument(
+        "--max-total-turns",
+        type=int,
+        default=None,
+        help="phase_to_closing 時の安全上限（未指定なら max-turns + 7）",
+    )
     self_play.add_argument("--conda-env", default="py-dspy", help="使用する conda 環境名（空文字で無効化）")
+    self_play.add_argument(
+        "--client-style",
+        choices=["auto", "cooperative", "ambivalent", "resistant"],
+        default=None,
+        help="クライアントのペルソナ（既定: auto=プロファイルから推定）。",
+    )
+    self_play.add_argument(
+        "--client-code",
+        default=None,
+        help="単発実行する CLIENT_CODE。'all' で15ケース一括実行。",
+    )
+    self_play.add_argument(
+        "--all-cases",
+        action="store_true",
+        help="LANG|SOCIAL|UNSOCIAL × MGR|LOWINC|ISO|STABLE|MOB の15ケースを順次実行し、既存成果物は自動スキップ。",
+    )
+    self_play.add_argument(
+        "--logs-dir",
+        default=None,
+        help="ログ出力先。--all-cases 時はこの配下に設定別サブディレクトリを作成。",
+    )
 
     human_counselor = sub.add_parser("human-counselor", help="人間カウンセラー × LLMクライアント（自動ラベル付け）")
     human_counselor.add_argument("--conda-env", default="py-dspy", help="使用する conda 環境名（空文字で無効化）")
@@ -424,7 +464,27 @@ def main() -> None:
     if args.command == "human-client":
         run_human_client_counselor_cli(conda_env=args.conda_env)
     elif args.command == "self-play":
-        run_agent_dual_simulation(max_turns=args.max_turns, conda_env=args.conda_env)
+        logs_dir = Path(args.logs_dir).expanduser() if args.logs_dir else None
+        run_all_cases = bool(args.all_cases) or str(args.client_code or "").strip().lower() == "all"
+        if run_all_cases:
+            run_agent_dual_simulation_batch(
+                max_turns=args.max_turns,
+                max_turns_completion=args.max_turns_completion,
+                max_total_turns=args.max_total_turns,
+                conda_env=args.conda_env,
+                client_style=args.client_style,
+                logs_dir=logs_dir,
+            )
+        else:
+            run_agent_dual_simulation(
+                max_turns=args.max_turns,
+                max_turns_completion=args.max_turns_completion,
+                max_total_turns=args.max_total_turns,
+                conda_env=args.conda_env,
+                client_style=args.client_style,
+                client_code=args.client_code,
+                logs_dir=logs_dir,
+            )
     elif args.command == "human-counselor":
         run_human_counselor_client_cli(conda_env=args.conda_env)
     else:

@@ -1,23 +1,26 @@
 import os
 import json
 import re
+import time
 from dataclasses import asdict
 from typing import Any, Dict, List, Optional, Tuple
 
 from env_utils import build_llm_from_config, get_model_config, load_openai_api_key
 from client_llm_loader import build_client_llms
-from perma_client_agent import SimpleClientLLM
+from perma_client_agent import DEFAULT_CLIENT_CODE, SimpleClientLLM
 from conversation_environment import ConversationTurn, ManualConversationEnvironment
 from session_log_tools import finalize_session
+from mi_prompt_knowledge import inject_mi_knowledge
 from mi_counselor_agent import (
     DialogueState,
     InfoMode,
     LLMClient,
-    LLMPhaseClassifier,
     MainAction,
     Phase,
     PlannerConfig,
     apply_action_to_state,
+    classify_phase_heuristic,
+    coerce_main_action,
     extract_features,
 )
 
@@ -25,6 +28,28 @@ from mi_counselor_agent import (
 # LLM action classifier (for counselor utterance)
 # =========================
 _ACTION_LABELS = [a.value for a in MainAction]
+
+
+def _build_latency_meta(
+    *,
+    start_perf: float,
+    end_perf: float,
+    start_ns: int,
+    end_ns: int,
+) -> Dict[str, Any]:
+    latency_ms = max(0.0, (end_perf - start_perf) * 1000.0)
+    end_unix_ms = int(end_ns // 1_000_000)
+    start_unix_ms_direct = int(start_ns // 1_000_000)
+    start_unix_ms_from_latency = int(max(0, end_unix_ms - round(latency_ms)))
+    if abs(start_unix_ms_direct - start_unix_ms_from_latency) <= 3000:
+        start_unix_ms = start_unix_ms_direct
+    else:
+        start_unix_ms = start_unix_ms_from_latency
+    return {
+        "latency_ms": round(latency_ms, 3),
+        "latency_start_unix_ms": start_unix_ms,
+        "latency_end_unix_ms": end_unix_ms,
+    }
 
 
 def _extract_first_json_object(text: str) -> Optional[str]:
@@ -45,10 +70,10 @@ def _heuristic_action(counselor_text: str) -> MainAction:
     if not t:
         return MainAction.REFLECT
 
-    # ASK_PERMISSION を先に判定（"してもよろしいですか" 等）
+    # ASK_PERMISSION_TO_SHARE_INFO を先に判定（"してもよろしいですか" 等）
     if any(k in t for k in ["よろしいでしょうか", "よろしいですか", "してもいい", "してもよい", "差し支え", "共有しても"]):
         if ("？" in t) or ("?" in t) or ("ですか" in t) or ("でしょうか" in t):
-            return MainAction.ASK_PERMISSION
+            return MainAction.ASK_PERMISSION_TO_SHARE_INFO
 
     # PROVIDE_INFO（情報提示っぽい）
     if any(k in t for k in ["例えば", "一般に", "方法", "コツ", "選択肢", "ポイント", "目安"]):
@@ -109,7 +134,7 @@ class LLMActionClassifier:
             "- REFLECT: 相手の言葉/感情/価値の言い換え・反射。基本的に質問しない。\n"
             "- QUESTION: 1つの質問（情報収集・掘り下げ）。\n"
             "- SUMMARY: ここまでの要点をまとめる。\n"
-            "- ASK_PERMISSION: 情報提供/提案の前に許可を取る。\n"
+            "- ASK_PERMISSION_TO_SHARE_INFO: 情報提供/提案の前に許可を取る。\n"
             "- PROVIDE_INFO: 中立に情報・選択肢・提案を提示し、最後に反応を尋ねてもよい。\n"
             "\n"
             "【add_affirm】\n"
@@ -120,6 +145,7 @@ class LLMActionClassifier:
             "- 余計な文章は書かず、次の JSON だけを1行で出力してください。\n"
             '  例: {"main_action":"REFLECT","add_affirm":false}\n'
         )
+        system = inject_mi_knowledge(system, agent_name="human_counselor_action_classifier")
 
         user = (
             f"【フェーズ】{phase.value}\n"
@@ -147,8 +173,9 @@ class LLMActionClassifier:
             ma = str(obj.get("main_action", "")).strip()
             af = obj.get("add_affirm", None)
 
-            if ma in _ACTION_LABELS:
-                main_action = MainAction(ma)
+            parsed_action = coerce_main_action(ma)
+            if parsed_action is not None:
+                main_action = parsed_action
 
             if isinstance(af, bool):
                 add_affirm = af
@@ -181,10 +208,6 @@ def main(
     log_prefix: str = "session_human_counselor_client_cli",
 ) -> None:
     api_key = load_openai_api_key()
-    phase_cfg = get_model_config(
-        "counselor_phase",
-        role="counselor",
-    )
     action_cfg = get_model_config(
         "counselor_action",
         role="counselor",
@@ -196,9 +219,8 @@ def main(
     client_llm_state = client_llms["client_llm_state"]
     client_llm_reply = client_llms["client_llm_reply"]
     # ---- client_profiles.yaml からクライアント特性をロード ----
-    client_code = (os.getenv("CLIENT_CODE") or "C01").strip() or "C01"
-    # counselor (labeler) / action classifier / client LLM
-    phase_llm = build_llm_from_config(phase_cfg, api_key)
+    client_code = (os.getenv("CLIENT_CODE") or DEFAULT_CLIENT_CODE).strip() or DEFAULT_CLIENT_CODE
+    # counselor (labeler) / client LLM
     action_llm = build_llm_from_config(action_cfg, api_key)
     llm_for_eval = client_llm_reply
 
@@ -210,11 +232,9 @@ def main(
         llm_reply=client_llm_reply,
         env_style=os.getenv("CLIENT_STYLE", "auto"),
         first_client_utterance_env=os.getenv("FIRST_CLIENT_UTTERANCE"),
-        max_state_step_env=os.getenv("CLIENT_MAX_STATE_STEP", "none"),
+        # 改善: 既定値は from_profile 側の 0.8 に委ねる
+        max_state_step_env=os.getenv("CLIENT_MAX_STATE_STEP"),
     )
-
-    # LLMでフェーズ判定（8フェーズ想定。mi_counselor_agent.Phase に依存）
-    phase_clf = LLMPhaseClassifier(llm=phase_llm, temperature=0.0, max_history_turns=8)
 
     # LLMで「カウンセラー発話の行動ラベル」を推定
     action_clf = LLMActionClassifier(llm=action_llm, temperature=0.0, max_history_turns=10)
@@ -223,7 +243,8 @@ def main(
     state = DialogueState()
     session_meta = {
         "session_mode": "human_counselor",
-        "openai_model": phase_cfg.get("model", ""),
+        "openai_model": action_cfg.get("model", ""),
+        "reasoning_effort": action_cfg.get("reasoning_effort", ""),
         "action_model": action_cfg.get("model", ""),
         "client_model_state": client_state_cfg.get("model", ""),
         "client_model_reply": client_reply_cfg.get("model", ""),
@@ -237,7 +258,10 @@ def main(
         "client_primary_focus": client_bundle.derived_meta.get("primary_focus_code", ""),
         "client_primary_focus_label": client_bundle.derived_meta.get("primary_focus_label", ""),
         "client_interpersonal_style": client_bundle.derived_meta.get("interpersonal_style_code", ""),
-        "client_interpersonal_style_label": client_bundle.derived_meta.get("interpersonal_style_label", ""),
+        # ラベル列は出さず、属性を追加
+        "client_age_range": client_bundle.derived_meta.get("age_range", ""),
+        "client_sex": client_bundle.derived_meta.get("sex", ""),
+        "client_marital_status": client_bundle.derived_meta.get("marital_status", ""),
         "client_profiles_path": str(client_bundle.profiles_path),
         "planner_config": asdict(cfg),
     }
@@ -258,8 +282,15 @@ def main(
     print("============================================================")
 
     while True:
-        # ---- 1) フェーズ判定（クライアント発話から）
-        phase, phase_debug = phase_clf.classify(history=history_pairs, state=state, user_text=current_client_text)
+        # ---- 1) フェーズ判定（ヒューリスティック）
+        prev_phase = state.phase
+        phase = classify_phase_heuristic(current_client_text, state.phase)
+        phase_debug = {
+            "method": "heuristic",
+            "previous_phase": prev_phase.value,
+            "predicted_phase": phase.value,
+            "source": "latest_client_text",
+        }
         state.phase = phase
 
         # ---- 2) 特徴量（クライアント発話から）
@@ -271,11 +302,21 @@ def main(
 
         # ---- 3) 人間カウンセラーの入力
         print(f"Client: {current_client_text}")
+        counselor_start_ns = time.time_ns()
+        counselor_start_perf = time.perf_counter()
         try:
             counselor_text = input("Counselor: ").strip()
         except (EOFError, KeyboardInterrupt):
             print("\n入力が閉じられたため終了します。")
             break
+        counselor_end_perf = time.perf_counter()
+        counselor_end_ns = time.time_ns()
+        counselor_latency = _build_latency_meta(
+            start_perf=counselor_start_perf,
+            end_perf=counselor_end_perf,
+            start_ns=counselor_start_ns,
+            end_ns=counselor_end_ns,
+        )
 
         if counselor_text.lower() == "exit":
             break
@@ -299,7 +340,7 @@ def main(
             "turns_since_affirm": state.turns_since_affirm,
             "info_mode": state.info_mode.value,
             "features": asdict(features),
-            "phase_llm": phase_debug,
+            "phase_debug": phase_debug,
             "action_llm": action_debug,
         }
 
@@ -311,6 +352,7 @@ def main(
                     "phase": phase.value,
                     "main_action": action.value,
                     "add_affirm": bool(add_affirm),
+                    **counselor_latency,
                     "debug": meta_debug,
                 },
             )
@@ -323,29 +365,73 @@ def main(
         state = next_state
 
         # ---- 7) 次のクライアント発話（LLM）
+        client_start_ns = time.time_ns()
+        client_start_perf = time.perf_counter()
         next_client_text = client.respond(counselor_text, env.log)
+        client_end_perf = time.perf_counter()
+        client_end_ns = time.time_ns()
+        client_latency = _build_latency_meta(
+            start_perf=client_start_perf,
+            end_perf=client_end_perf,
+            start_ns=client_start_ns,
+            end_ns=client_end_ns,
+        )
+
+        def _strip_trait_keys(state_obj: Any) -> Dict[str, Any]:
+            if not isinstance(state_obj, dict):
+                return {}
+            return {str(k): v for k, v in state_obj.items() if not str(k).startswith("trait_")}
 
         # ★ 追加：クライアント内部状態をメタ情報として保存
-        client_meta: Dict[str, Any] = {}
-        client_debug = None
-        if hasattr(client, "get_internal_state"):
-            try:
-                client_state = client.get_internal_state()
-                client_meta["client_internal_state"] = client_state
-            except Exception:
-                pass
+        client_meta: Dict[str, Any] = dict(client_latency)
+        client_debug: Dict[str, Any] = {}
 
         # デバッグ目的でクライアント内部ログをコンソール表示（数値のみ）
         if hasattr(client, "get_last_debug_info"):
             try:
-                client_debug = client.get_last_debug_info()
-                state_reason = client_debug.get("internal_state_reason") or {}
-                meta_extra = client_debug.get("meta") or {}
-                parse_status = meta_extra.get("parse_status") or client_debug.get("parse_status")
+                dbg = client.get_last_debug_info()
+                if isinstance(dbg, dict):
+                    client_debug = dbg
+
+                # 1つ前の counselor 行に「聞いた直後」の状態を載せる
+                state_after_listen = _strip_trait_keys(client_debug.get("state_after_listen"))
+                if state_after_listen and env.log and env.log[-1].speaker == "counselor":
+                    prev_meta = dict(env.log[-1].meta or {})
+                    prev_meta["client_internal_state"] = state_after_listen
+                    reason_after_listen = client_debug.get("internal_state_reason_after_listen") or None
+                    if reason_after_listen:
+                        prev_meta["client_internal_state_reason"] = reason_after_listen
+                    meta_after_listen = client_debug.get("meta_after_listen") or None
+                    if meta_after_listen:
+                        prev_meta["client_meta"] = meta_after_listen
+                        parse_status_listen = (
+                            meta_after_listen.get("parse_status")
+                            if isinstance(meta_after_listen, dict)
+                            else None
+                        )
+                        if parse_status_listen:
+                            prev_meta["parse_status"] = parse_status_listen
+                    raw_after_listen = client_debug.get("raw_state_after_listen")
+                    if raw_after_listen:
+                        prev_meta["client_raw"] = raw_after_listen
+                    env.log[-1].meta = prev_meta
+
+                # client 行には「話した直後」の状態を載せる
+                state_after_speak = _strip_trait_keys(client_debug.get("state_after_speak"))
+                if state_after_speak:
+                    client_meta["client_internal_state"] = state_after_speak
+
+                state_reason = (
+                    client_debug.get("internal_state_reason_after_speak")
+                    or client_debug.get("internal_state_reason")
+                    or {}
+                )
+                meta_extra = client_debug.get("meta_after_speak") or client_debug.get("meta") or {}
+                parse_status = meta_extra.get("parse_status") if isinstance(meta_extra, dict) else None
                 new_state = client_debug.get("new_state")
 
                 if isinstance(new_state, dict):
-                    printable_state = {k: v for k, v in new_state.items() if not str(k).startswith("trait_")}
+                    printable_state = _strip_trait_keys(new_state)
                     print("  [client state]", json.dumps(printable_state, ensure_ascii=False))
                 if parse_status and parse_status != "ok":
                     print(f"  [client state parse_status] {parse_status}")
@@ -358,12 +444,22 @@ def main(
                 # パース状況がわかるように追加
                 if parse_status:
                     client_meta["parse_status"] = parse_status
-                if "raw_reply" in (client_debug or {}):
+                if "raw_reply" in client_debug:
                     client_meta["client_raw"] = client_debug.get("raw_reply")
-                elif "raw_state" in (client_debug or {}):
+                elif "raw_state_after_speak" in client_debug:
+                    client_meta["client_raw"] = client_debug.get("raw_state_after_speak")
+                elif "raw_state" in client_debug:
                     client_meta["client_raw"] = client_debug.get("raw_state")
             except Exception:
-                client_debug = None
+                client_debug = {}
+
+        if "client_internal_state" not in client_meta and hasattr(client, "get_internal_state"):
+            try:
+                client_state = _strip_trait_keys(client.get_internal_state())
+                if client_state:
+                    client_meta["client_internal_state"] = client_state
+            except Exception:
+                pass
 
         env.log.append(ConversationTurn(speaker="client", text=next_client_text, meta=(client_meta or None)))
         history_pairs.append(("user", next_client_text))
