@@ -1,0 +1,2 @@
+"analysis","n","interaction_p_value_ml_lrt","model_status","warnings","variance_summary"
+"client_naturalness_pair_mean_lmm",120,0.0957170783054895,"ok_or_warning",""," Groups   Name        Std.Dev. |  pair_id  (Intercept) 0.44986  |  Residual             0.59590 "

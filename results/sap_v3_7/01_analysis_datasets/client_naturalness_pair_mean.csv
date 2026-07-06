@@ -1,0 +1,121 @@
+﻿pair_id,situation,situation_code,perma_profile,perma_code,generation_id,client_type,rater_id,client_naturalness_pair_mean_initial,client_naturalness_pair_mean_final,client_naturalness_pair_mean_analysis,client_naturalness_pair_available_source_count,presentation_order_pair_mean,presentation_order_pair_mean_z
+G01_LANG_ISO,Living alone, socially isolated, and reluctant to seek help,S3,Languishers,P1,1,LANG_ISO,rater_1,6.5,4.5,4.5,2,28.0,-0.21650635094610965
+G01_LANG_ISO,Living alone, socially isolated, and reluctant to seek help,S3,Languishers,P1,1,LANG_ISO,rater_2,2.5,2.5,2.5,2,35.5,0.419516827052525
+G01_LANG_ISO,Living alone, socially isolated, and reluctant to seek help,S3,Languishers,P1,1,LANG_ISO,rater_3,4.0,4.0,4.0,2,23.0,-0.750125031258683
+G01_LANG_ISO,Living alone, socially isolated, and reluctant to seek help,S3,Languishers,P1,1,LANG_ISO,rater_4,3.0,3.0,3.0,2,32.5,0.18156825980064073
+G01_LANG_LOWINC,Living with parents, low income, and continued non-regular employment,S2,Languishers,P1,1,LANG_LOWINC,rater_1,6.0,6.0,6.0,2,31.0,0.043301270189221926
+G01_LANG_LOWINC,Living with parents, low income, and continued non-regular employment,S2,Languishers,P1,1,LANG_LOWINC,rater_2,7.0,7.0,7.0,2,12.5,-1.5102605773890903
+G01_LANG_LOWINC,Living with parents, low income, and continued non-regular employment,S2,Languishers,P1,1,LANG_LOWINC,rater_3,4.5,5.0,5.0,2,32.0,0.15002500625173662
+G01_LANG_LOWINC,Living with parents, low income, and continued non-regular employment,S2,Languishers,P1,1,LANG_LOWINC,rater_4,7.5,7.5,7.5,2,14.0,-1.497938143355286
+G01_LANG_MGR,Overburdened middle manager,S1,Languishers,P1,1,LANG_MGR,rater_1,6.0,5.0,5.0,2,19.0,-0.9959292143521044
+G01_LANG_MGR,Overburdened middle manager,S1,Languishers,P1,1,LANG_MGR,rater_2,2.5,3.5,3.5,2,35.0,0.37756514434727256
+G01_LANG_MGR,Overburdened middle manager,S1,Languishers,P1,1,LANG_MGR,rater_3,3.0,3.0,3.0,2,49.0,1.850308410438085
+G01_LANG_MGR,Overburdened middle manager,S1,Languishers,P1,1,LANG_MGR,rater_4,5.0,5.0,5.0,2,38.5,0.7262730392025629
+G01_LANG_MOB,Repeated job changes and declining self-evaluation,S5,Languishers,P1,1,LANG_MOB,rater_1,6.0,4.5,4.5,2,18.5,-1.0392304845413263
+G01_LANG_MOB,Repeated job changes and declining self-evaluation,S5,Languishers,P1,1,LANG_MOB,rater_2,3.5,3.5,3.5,2,46.0,1.3005021638628276
+G01_LANG_MOB,Repeated job changes and declining self-evaluation,S5,Languishers,P1,1,LANG_MOB,rater_3,2.5,3.5,3.5,2,44.0,1.3502250562656295
+G01_LANG_MOB,Repeated job changes and declining self-evaluation,S5,Languishers,P1,1,LANG_MOB,rater_4,5.0,5.0,5.0,2,25.5,-0.4539206495016018
+G01_LANG_STABLE,Stably employed professional with limited interpersonal ties,S4,Languishers,P1,1,LANG_STABLE,rater_1,5.0,5.0,5.0,2,51.5,1.818653347947321
+G01_LANG_STABLE,Stably employed professional with limited interpersonal ties,S4,Languishers,P1,1,LANG_STABLE,rater_2,2.5,3.5,3.5,2,3.5,-2.265390866083635
+G01_LANG_STABLE,Stably employed professional with limited interpersonal ties,S4,Languishers,P1,1,LANG_STABLE,rater_3,4.0,4.0,4.0,2,36.0,0.5500916895897009
+G01_LANG_STABLE,Stably employed professional with limited interpersonal ties,S4,Languishers,P1,1,LANG_STABLE,rater_4,6.0,5.5,5.5,2,34.0,0.3177444546511213
+G01_SOCIAL_ISO,Living alone, socially isolated, and reluctant to seek help,S3,Social hedonics,P2,1,SOCIAL_ISO,rater_1,6.5,5.5,5.5,2,38.5,0.6928203230275508
+G01_SOCIAL_ISO,Living alone, socially isolated, and reluctant to seek help,S3,Social hedonics,P2,1,SOCIAL_ISO,rater_2,2.0,4.0,4.0,2,15.0,-1.3005021638628276
+G01_SOCIAL_ISO,Living alone, socially isolated, and reluctant to seek help,S3,Social hedonics,P2,1,SOCIAL_ISO,rater_3,3.5,3.5,3.5,2,12.5,-1.8003000750208393
+G01_SOCIAL_ISO,Living alone, socially isolated, and reluctant to seek help,S3,Social hedonics,P2,1,SOCIAL_ISO,rater_4,6.0,5.5,5.5,2,26.5,-0.36313651960128146
+G01_SOCIAL_LOWINC,Living with parents, low income, and continued non-regular employment,S2,Social hedonics,P2,1,SOCIAL_LOWINC,rater_1,6.0,5.0,5.0,2,25.5,-0.4330127018922193
+G01_SOCIAL_LOWINC,Living with parents, low income, and continued non-regular employment,S2,Social hedonics,P2,1,SOCIAL_LOWINC,rater_2,3.5,3.5,3.5,2,44.0,1.1326954330418175
+G01_SOCIAL_LOWINC,Living with parents, low income, and continued non-regular employment,S2,Social hedonics,P2,1,SOCIAL_LOWINC,rater_3,3.5,3.5,3.5,2,18.5,-1.200200050013893
+G01_SOCIAL_LOWINC,Living with parents, low income, and continued non-regular employment,S2,Social hedonics,P2,1,SOCIAL_LOWINC,rater_4,3.5,3.5,3.5,2,28.5,-0.18156825980064073
+G01_SOCIAL_MGR,Overburdened middle manager,S1,Social hedonics,P2,1,SOCIAL_MGR,rater_1,5.5,5.5,5.5,2,44.0,1.169134295108992
+G01_SOCIAL_MGR,Overburdened middle manager,S1,Social hedonics,P2,1,SOCIAL_MGR,rater_2,1.5,3.5,3.5,2,16.0,-1.2165987984523225
+G01_SOCIAL_MGR,Overburdened middle manager,S1,Social hedonics,P2,1,SOCIAL_MGR,rater_3,4.0,4.0,4.0,2,31.5,0.10001667083449108
+G01_SOCIAL_MGR,Overburdened middle manager,S1,Social hedonics,P2,1,SOCIAL_MGR,rater_4,7.0,7.0,7.0,2,36.5,0.5447047794019222
+G01_SOCIAL_MOB,Repeated job changes and declining self-evaluation,S5,Social hedonics,P2,1,SOCIAL_MOB,rater_1,5.5,5.5,5.5,2,47.0,1.4289419162443235
+G01_SOCIAL_MOB,Repeated job changes and declining self-evaluation,S5,Social hedonics,P2,1,SOCIAL_MOB,rater_2,3.0,3.0,3.0,2,47.0,1.3844055292733326
+G01_SOCIAL_MOB,Repeated job changes and declining self-evaluation,S5,Social hedonics,P2,1,SOCIAL_MOB,rater_3,4.0,4.0,4.0,2,23.0,-0.750125031258683
+G01_SOCIAL_MOB,Repeated job changes and declining self-evaluation,S5,Social hedonics,P2,1,SOCIAL_MOB,rater_4,5.5,5.5,5.5,2,31.0,0.04539206495016018
+G01_SOCIAL_STABLE,Stably employed professional with limited interpersonal ties,S4,Social hedonics,P2,1,SOCIAL_STABLE,rater_1,6.5,6.5,6.5,2,38.5,0.6928203230275508
+G01_SOCIAL_STABLE,Stably employed professional with limited interpersonal ties,S4,Social hedonics,P2,1,SOCIAL_STABLE,rater_2,5.0,5.0,5.0,2,21.0,-0.7970819713997976
+G01_SOCIAL_STABLE,Stably employed professional with limited interpersonal ties,S4,Social hedonics,P2,1,SOCIAL_STABLE,rater_3,3.5,4.5,4.5,2,36.5,0.6001000250069465
+G01_SOCIAL_STABLE,Stably employed professional with limited interpersonal ties,S4,Social hedonics,P2,1,SOCIAL_STABLE,rater_4,7.5,7.0,7.0,2,5.5,-2.2696032475080092
+G01_UNSOCIAL_ISO,Living alone, socially isolated, and reluctant to seek help,S3,Unsocial eudemonics,P3,1,UNSOCIAL_ISO,rater_1,6.0,6.0,6.0,2,22.5,-0.6928203230275508
+G01_UNSOCIAL_ISO,Living alone, socially isolated, and reluctant to seek help,S3,Unsocial eudemonics,P3,1,UNSOCIAL_ISO,rater_2,4.0,4.0,4.0,2,27.5,-0.251710096231515
+G01_UNSOCIAL_ISO,Living alone, socially isolated, and reluctant to seek help,S3,Unsocial eudemonics,P3,1,UNSOCIAL_ISO,rater_3,4.5,4.5,4.5,2,25.0,-0.5500916895897009
+G01_UNSOCIAL_ISO,Living alone, socially isolated, and reluctant to seek help,S3,Unsocial eudemonics,P3,1,UNSOCIAL_ISO,rater_4,4.5,4.5,4.5,2,12.0,-1.6795064031559268
+G01_UNSOCIAL_LOWINC,Living with parents, low income, and continued non-regular employment,S2,Unsocial eudemonics,P3,1,UNSOCIAL_LOWINC,rater_1,6.5,6.5,6.5,2,53.0,1.9485571585149868
+G01_UNSOCIAL_LOWINC,Living with parents, low income, and continued non-regular employment,S2,Unsocial eudemonics,P3,1,UNSOCIAL_LOWINC,rater_2,2.5,4.5,4.5,2,52.5,1.8458740390311101
+G01_UNSOCIAL_LOWINC,Living with parents, low income, and continued non-regular employment,S2,Unsocial eudemonics,P3,1,UNSOCIAL_LOWINC,rater_3,4.0,4.0,4.0,2,29.5,-0.10001667083449108
+G01_UNSOCIAL_LOWINC,Living with parents, low income, and continued non-regular employment,S2,Unsocial eudemonics,P3,1,UNSOCIAL_LOWINC,rater_4,7.5,7.0,7.0,2,51.5,1.9064667279067276
+G01_UNSOCIAL_MGR,Overburdened middle manager,S1,Unsocial eudemonics,P3,1,UNSOCIAL_MGR,rater_1,6.0,5.0,5.0,2,17.0,-1.169134295108992
+G01_UNSOCIAL_MGR,Overburdened middle manager,S1,Unsocial eudemonics,P3,1,UNSOCIAL_MGR,rater_2,1.5,2.5,2.5,2,31.0,0.041951682705252506
+G01_UNSOCIAL_MGR,Overburdened middle manager,S1,Unsocial eudemonics,P3,1,UNSOCIAL_MGR,rater_3,2.5,2.5,2.5,2,34.0,0.35005834792071877
+G01_UNSOCIAL_MGR,Overburdened middle manager,S1,Unsocial eudemonics,P3,1,UNSOCIAL_MGR,rater_4,5.5,4.5,4.5,2,36.0,0.499312714451762
+G01_UNSOCIAL_MOB,Repeated job changes and declining self-evaluation,S5,Unsocial eudemonics,P3,1,UNSOCIAL_MOB,rater_1,6.0,6.0,6.0,2,27.0,-0.3031088913245535
+G01_UNSOCIAL_MOB,Repeated job changes and declining self-evaluation,S5,Unsocial eudemonics,P3,1,UNSOCIAL_MOB,rater_2,2.0,3.0,3.0,2,13.5,-1.4263572119785852
+G01_UNSOCIAL_MOB,Repeated job changes and declining self-evaluation,S5,Unsocial eudemonics,P3,1,UNSOCIAL_MOB,rater_3,4.0,4.0,4.0,2,30.0,-0.05000833541724554
+G01_UNSOCIAL_MOB,Repeated job changes and declining self-evaluation,S5,Unsocial eudemonics,P3,1,UNSOCIAL_MOB,rater_4,5.0,5.0,5.0,2,46.0,1.4071540134549656
+G01_UNSOCIAL_STABLE,Stably employed professional with limited interpersonal ties,S4,Unsocial eudemonics,P3,1,UNSOCIAL_STABLE,rater_1,6.0,5.0,5.0,2,39.5,0.7794228634059948
+G01_UNSOCIAL_STABLE,Stably employed professional with limited interpersonal ties,S4,Unsocial eudemonics,P3,1,UNSOCIAL_STABLE,rater_2,2.5,3.5,3.5,2,33.5,0.251710096231515
+G01_UNSOCIAL_STABLE,Stably employed professional with limited interpersonal ties,S4,Unsocial eudemonics,P3,1,UNSOCIAL_STABLE,rater_3,3.0,3.0,3.0,2,16.5,-1.400233391682875
+G01_UNSOCIAL_STABLE,Stably employed professional with limited interpersonal ties,S4,Unsocial eudemonics,P3,1,UNSOCIAL_STABLE,rater_4,4.0,4.0,4.0,2,30.5,0.0
+G02_LANG_ISO,Living alone, socially isolated, and reluctant to seek help,S3,Languishers,P1,2,LANG_ISO,rater_1,5.5,5.5,5.5,2,30.0,-0.043301270189221926
+G02_LANG_ISO,Living alone, socially isolated, and reluctant to seek help,S3,Languishers,P1,2,LANG_ISO,rater_2,4.0,5.0,5.0,2,45.0,1.2165987984523225
+G02_LANG_ISO,Living alone, socially isolated, and reluctant to seek help,S3,Languishers,P1,2,LANG_ISO,rater_3,4.5,4.5,4.5,2,42.0,1.1501917145966474
+G02_LANG_ISO,Living alone, socially isolated, and reluctant to seek help,S3,Languishers,P1,2,LANG_ISO,rater_4,6.0,6.0,6.0,2,30.5,0.0
+G02_LANG_LOWINC,Living with parents, low income, and continued non-regular employment,S2,Languishers,P1,2,LANG_LOWINC,rater_1,4.5,4.5,4.5,2,13.0,-1.5155444566227674
+G02_LANG_LOWINC,Living with parents, low income, and continued non-regular employment,S2,Languishers,P1,2,LANG_LOWINC,rater_2,1.5,2.5,2.5,2,32.0,0.1258550481157575
+G02_LANG_LOWINC,Living with parents, low income, and continued non-regular employment,S2,Languishers,P1,2,LANG_LOWINC,rater_3,3.5,3.5,3.5,2,23.0,-0.750125031258683
+G02_LANG_LOWINC,Living with parents, low income, and continued non-regular employment,S2,Languishers,P1,2,LANG_LOWINC,rater_4,5.0,5.0,5.0,2,24.0,-0.5900968443520823
+G02_LANG_MGR,Overburdened middle manager,S1,Languishers,P1,2,LANG_MGR,rater_1,5.5,5.5,5.5,2,25.5,-0.4330127018922193
+G02_LANG_MGR,Overburdened middle manager,S1,Languishers,P1,2,LANG_MGR,rater_2,3.0,4.0,4.0,2,23.0,-0.6292752405787876
+G02_LANG_MGR,Overburdened middle manager,S1,Languishers,P1,2,LANG_MGR,rater_3,4.0,4.0,4.0,2,24.0,-0.650108360424192
+G02_LANG_MGR,Overburdened middle manager,S1,Languishers,P1,2,LANG_MGR,rater_4,5.5,5.5,5.5,2,25.5,-0.4539206495016018
+G02_LANG_MOB,Repeated job changes and declining self-evaluation,S5,Languishers,P1,2,LANG_MOB,rater_1,5.5,5.5,5.5,2,49.0,1.6021469970012114
+G02_LANG_MOB,Repeated job changes and declining self-evaluation,S5,Languishers,P1,2,LANG_MOB,rater_2,1.5,3.5,3.5,2,25.0,-0.46146850975777753
+G02_LANG_MOB,Repeated job changes and declining self-evaluation,S5,Languishers,P1,2,LANG_MOB,rater_3,3.5,3.5,3.5,2,37.0,0.650108360424192
+G02_LANG_MOB,Repeated job changes and declining self-evaluation,S5,Languishers,P1,2,LANG_MOB,rater_4,5.0,5.0,5.0,2,27.0,-0.3177444546511213
+G02_LANG_STABLE,Stably employed professional with limited interpersonal ties,S4,Languishers,P1,2,LANG_STABLE,rater_1,5.5,5.5,5.5,2,18.5,-1.0392304845413263
+G02_LANG_STABLE,Stably employed professional with limited interpersonal ties,S4,Languishers,P1,2,LANG_STABLE,rater_2,3.5,4.5,4.5,2,35.0,0.37756514434727256
+G02_LANG_STABLE,Stably employed professional with limited interpersonal ties,S4,Languishers,P1,2,LANG_STABLE,rater_3,4.0,4.0,4.0,2,20.5,-1.0001667083449106
+G02_LANG_STABLE,Stably employed professional with limited interpersonal ties,S4,Languishers,P1,2,LANG_STABLE,rater_4,5.0,5.0,5.0,2,42.0,1.0440174938536841
+G02_SOCIAL_ISO,Living alone, socially isolated, and reluctant to seek help,S3,Social hedonics,P2,2,SOCIAL_ISO,rater_1,5.5,5.5,5.5,2,28.0,-0.21650635094610965
+G02_SOCIAL_ISO,Living alone, socially isolated, and reluctant to seek help,S3,Social hedonics,P2,2,SOCIAL_ISO,rater_2,2.5,3.5,3.5,2,22.0,-0.7131786059892926
+G02_SOCIAL_ISO,Living alone, socially isolated, and reluctant to seek help,S3,Social hedonics,P2,2,SOCIAL_ISO,rater_3,4.5,4.5,4.5,2,26.5,-0.4000666833379643
+G02_SOCIAL_ISO,Living alone, socially isolated, and reluctant to seek help,S3,Social hedonics,P2,2,SOCIAL_ISO,rater_4,6.0,6.0,6.0,2,36.0,0.499312714451762
+G02_SOCIAL_LOWINC,Living with parents, low income, and continued non-regular employment,S2,Social hedonics,P2,2,SOCIAL_LOWINC,rater_1,4.5,4.5,4.5,2,53.5,1.9918584287042087
+G02_SOCIAL_LOWINC,Living with parents, low income, and continued non-regular employment,S2,Social hedonics,P2,2,SOCIAL_LOWINC,rater_2,1.0,2.0,2.0,2,29.5,-0.08390336541050501
+G02_SOCIAL_LOWINC,Living with parents, low income, and continued non-regular employment,S2,Social hedonics,P2,2,SOCIAL_LOWINC,rater_3,3.5,3.5,3.5,2,10.0,-2.050341752107067
+G02_SOCIAL_LOWINC,Living with parents, low income, and continued non-regular employment,S2,Social hedonics,P2,2,SOCIAL_LOWINC,rater_4,5.5,4.5,4.5,2,40.0,0.8624492340530434
+G02_SOCIAL_MGR,Overburdened middle manager,S1,Social hedonics,P2,2,SOCIAL_MGR,rater_1,5.0,5.0,5.0,2,31.5,0.08660254037844385
+G02_SOCIAL_MGR,Overburdened middle manager,S1,Social hedonics,P2,2,SOCIAL_MGR,rater_2,5.0,5.0,5.0,2,44.0,1.1326954330418175
+G02_SOCIAL_MGR,Overburdened middle manager,S1,Social hedonics,P2,2,SOCIAL_MGR,rater_3,4.5,4.5,4.5,2,51.0,2.050341752107067
+G02_SOCIAL_MGR,Overburdened middle manager,S1,Social hedonics,P2,2,SOCIAL_MGR,rater_4,6.0,5.0,5.0,2,24.0,-0.5900968443520823
+G02_SOCIAL_MOB,Repeated job changes and declining self-evaluation,S5,Social hedonics,P2,2,SOCIAL_MOB,rater_1,6.0,6.0,6.0,2,18.5,-1.0392304845413263
+G02_SOCIAL_MOB,Repeated job changes and declining self-evaluation,S5,Social hedonics,P2,2,SOCIAL_MOB,rater_2,4.5,4.5,4.5,2,41.5,0.9229370195155551
+G02_SOCIAL_MOB,Repeated job changes and declining self-evaluation,S5,Social hedonics,P2,2,SOCIAL_MOB,rater_3,4.0,4.0,4.0,2,48.0,1.7502917396035937
+G02_SOCIAL_MOB,Repeated job changes and declining self-evaluation,S5,Social hedonics,P2,2,SOCIAL_MOB,rater_4,6.0,6.0,6.0,2,33.5,0.2723523897009611
+G02_SOCIAL_STABLE,Stably employed professional with limited interpersonal ties,S4,Social hedonics,P2,2,SOCIAL_STABLE,rater_1,6.0,6.0,6.0,2,21.5,-0.7794228634059948
+G02_SOCIAL_STABLE,Stably employed professional with limited interpersonal ties,S4,Social hedonics,P2,2,SOCIAL_STABLE,rater_2,1.0,3.0,3.0,2,15.0,-1.3005021638628276
+G02_SOCIAL_STABLE,Stably employed professional with limited interpersonal ties,S4,Social hedonics,P2,2,SOCIAL_STABLE,rater_3,3.5,3.5,3.5,2,32.0,0.15002500625173662
+G02_SOCIAL_STABLE,Stably employed professional with limited interpersonal ties,S4,Social hedonics,P2,2,SOCIAL_STABLE,rater_4,6.0,5.0,5.0,2,35.0,0.40852858455144164
+G02_UNSOCIAL_ISO,Living alone, socially isolated, and reluctant to seek help,S3,Unsocial eudemonics,P3,2,UNSOCIAL_ISO,rater_1,5.0,5.0,5.0,2,22.0,-0.7361215932167727
+G02_UNSOCIAL_ISO,Living alone, socially isolated, and reluctant to seek help,S3,Unsocial eudemonics,P3,2,UNSOCIAL_ISO,rater_2,1.0,3.0,3.0,2,40.0,0.7970819713997976
+G02_UNSOCIAL_ISO,Living alone, socially isolated, and reluctant to seek help,S3,Unsocial eudemonics,P3,2,UNSOCIAL_ISO,rater_3,3.5,3.5,3.5,2,33.0,0.25004167708622765
+G02_UNSOCIAL_ISO,Living alone, socially isolated, and reluctant to seek help,S3,Unsocial eudemonics,P3,2,UNSOCIAL_ISO,rater_4,6.0,5.0,5.0,2,21.0,-0.8624492340530434
+G02_UNSOCIAL_LOWINC,Living with parents, low income, and continued non-regular employment,S2,Unsocial eudemonics,P3,2,UNSOCIAL_LOWINC,rater_1,7.0,7.0,7.0,2,19.0,-0.9959292143521044
+G02_UNSOCIAL_LOWINC,Living with parents, low income, and continued non-regular employment,S2,Unsocial eudemonics,P3,2,UNSOCIAL_LOWINC,rater_2,2.5,4.0,4.0,2,33.5,0.251710096231515
+G02_UNSOCIAL_LOWINC,Living with parents, low income, and continued non-regular employment,S2,Unsocial eudemonics,P3,2,UNSOCIAL_LOWINC,rater_3,4.0,4.0,4.0,2,33.0,0.25004167708622765
+G02_UNSOCIAL_LOWINC,Living with parents, low income, and continued non-regular employment,S2,Unsocial eudemonics,P3,2,UNSOCIAL_LOWINC,rater_4,8.5,7.0,7.0,2,47.5,1.543330208305446
+G02_UNSOCIAL_MGR,Overburdened middle manager,S1,Unsocial eudemonics,P3,2,UNSOCIAL_MGR,rater_1,5.5,5.5,5.5,2,32.0,0.12990381056766578
+G02_UNSOCIAL_MGR,Overburdened middle manager,S1,Unsocial eudemonics,P3,2,UNSOCIAL_MGR,rater_2,2.0,3.0,3.0,2,26.0,-0.37756514434727256
+G02_UNSOCIAL_MGR,Overburdened middle manager,S1,Unsocial eudemonics,P3,2,UNSOCIAL_MGR,rater_3,3.5,3.5,3.5,2,35.5,0.5000833541724553
+G02_UNSOCIAL_MGR,Overburdened middle manager,S1,Unsocial eudemonics,P3,2,UNSOCIAL_MGR,rater_4,7.0,6.0,6.0,2,16.0,-1.3163698835546453
+G02_UNSOCIAL_MOB,Repeated job changes and declining self-evaluation,S5,Unsocial eudemonics,P3,2,UNSOCIAL_MOB,rater_1,5.5,5.5,5.5,2,25.5,-0.4330127018922193
+G02_UNSOCIAL_MOB,Repeated job changes and declining self-evaluation,S5,Unsocial eudemonics,P3,2,UNSOCIAL_MOB,rater_2,5.5,5.5,5.5,2,39.5,0.7551302886945451
+G02_UNSOCIAL_MOB,Repeated job changes and declining self-evaluation,S5,Unsocial eudemonics,P3,2,UNSOCIAL_MOB,rater_3,4.5,4.5,4.5,2,31.0,0.05000833541724554
+G02_UNSOCIAL_MOB,Repeated job changes and declining self-evaluation,S5,Unsocial eudemonics,P3,2,UNSOCIAL_MOB,rater_4,7.0,6.5,6.5,2,16.0,-1.3163698835546453
+G02_UNSOCIAL_STABLE,Stably employed professional with limited interpersonal ties,S4,Unsocial eudemonics,P3,2,UNSOCIAL_STABLE,rater_1,6.5,6.5,6.5,2,27.0,-0.3031088913245535
+G02_UNSOCIAL_STABLE,Stably employed professional with limited interpersonal ties,S4,Unsocial eudemonics,P3,2,UNSOCIAL_STABLE,rater_2,6.0,6.0,6.0,2,30.5,0.0
+G02_UNSOCIAL_STABLE,Stably employed professional with limited interpersonal ties,S4,Unsocial eudemonics,P3,2,UNSOCIAL_STABLE,rater_3,4.0,4.5,4.5,2,27.5,-0.30005001250347324
+G02_UNSOCIAL_STABLE,Stably employed professional with limited interpersonal ties,S4,Unsocial eudemonics,P3,2,UNSOCIAL_STABLE,rater_4,5.5,5.5,5.5,2,48.5,1.6341143382057666

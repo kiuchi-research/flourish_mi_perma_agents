@@ -1,0 +1,2 @@
+"analysis","n","interaction_p_value_ml_lrt","source_layer_beta","model_status","warnings","variance_summary"
+"client_naturalness_context_lmm",240,0.0952865949288403,0.135104058397043,"ok_or_warning",""," Groups           Name        Std.Dev. |  source_script_id (Intercept) 0.46386  |  pair_id          (Intercept) 0.61435  |  Residual                     0.88324 "

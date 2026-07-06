@@ -1,0 +1,15 @@
+Loading required package: Matrix
+2026-06-06 10:49:22 | Fitting primary CLMM models.
+2026-06-06 10:50:02 | Fitting initial-value sensitivity CLMM models.
+2026-06-06 10:50:40 | Fitting rater random-effect sensitivity models.
+2026-06-06 10:51:10 | Fitting numeric LMM sensitivity models.
+2026-06-06 10:51:11 | Fitting length-adjusted sensitivity models.
+2026-06-06 10:52:12 | Fitting leave-one-rater-out primary models.
+2026-06-06 10:55:18 | Fitting secondary Good-threshold models.
+boundary (singular) fit: see help('isSingular')
+boundary (singular) fit: see help('isSingular')
+boundary (singular) fit: see help('isSingular')
+2026-06-06 10:55:20 | Fitting exploratory global situation/PERMA models.
+2026-06-06 10:55:28 | Fitting client naturalness exploratory models.
+2026-06-06 10:55:28 | Fitting behavior-code exploratory models.
+2026-06-06 10:55:28 | R analysis completed.

@@ -1,0 +1,16 @@
+﻿situation,perma_profile,n,Q_mean,total_reflection_mean,pct_complex_reflection_mean,reflection_question_ratio_finite_mean,Total_MI_Adherent_mean,good_pct_complex_reflection_rate,good_reflection_question_ratio_rate
+Stably employed professional with limited interpersonal ties,Languishers,2,11.0,21.5,0.7673160173160173,1.9666666666666668,12.5,1.0,0.5
+Stably employed professional with limited interpersonal ties,Social hedonics,2,11.0,19.0,0.7394957983193278,1.725,12.5,1.0,0.0
+Stably employed professional with limited interpersonal ties,Unsocial eudemonics,2,11.5,20.5,0.8075980392156863,1.7727272727272727,13.0,1.0,0.5
+Living alone, socially isolated, and reluctant to seek help,Languishers,2,11.5,19.0,0.7611111111111111,1.6590909090909092,12.0,1.0,0.0
+Living alone, socially isolated, and reluctant to seek help,Social hedonics,2,12.5,20.0,0.7595907928388747,1.594155844155844,13.0,1.0,0.0
+Living alone, socially isolated, and reluctant to seek help,Unsocial eudemonics,2,10.5,23.0,0.7836257309941521,2.1805555555555554,14.0,1.0,1.0
+Living with parents, low income, and continued non-regular employment,Languishers,2,14.5,21.5,0.7697368421052632,1.4807692307692308,14.5,1.0,0.0
+Living with parents, low income, and continued non-regular employment,Social hedonics,2,10.0,20.0,0.8535353535353536,2.0404040404040407,13.0,1.0,0.5
+Living with parents, low income, and continued non-regular employment,Unsocial eudemonics,2,13.5,20.5,0.6607142857142857,1.5192307692307692,14.5,1.0,0.0
+Repeated job changes and declining self-evaluation,Languishers,2,11.0,25.5,0.6387096774193548,2.291666666666667,15.0,1.0,1.0
+Repeated job changes and declining self-evaluation,Social hedonics,2,9.0,19.0,0.7916666666666667,2.125,10.5,1.0,1.0
+Repeated job changes and declining self-evaluation,Unsocial eudemonics,2,8.5,19.5,0.8210526315789474,2.298611111111111,11.0,1.0,1.0
+Overburdened middle manager,Languishers,2,10.0,21.5,0.768888888888889,2.2472527472527473,13.5,1.0,0.5
+Overburdened middle manager,Social hedonics,2,11.0,22.5,0.714574898785425,2.091666666666667,14.5,1.0,0.5
+Overburdened middle manager,Unsocial eudemonics,2,10.0,22.5,0.7053571428571428,2.257575757575758,13.5,1.0,1.0

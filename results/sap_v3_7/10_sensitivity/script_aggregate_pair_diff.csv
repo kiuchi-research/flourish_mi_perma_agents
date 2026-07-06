@@ -1,0 +1,6 @@
+﻿outcome,n_pairs,mean_pair_diff_layer4_minus_layer3,sd_pair_diff,median_pair_diff,min_pair_diff,max_pair_diff,n_pair_diff_positive,n_pair_diff_zero,n_pair_diff_negative
+CCT,30,0.05,0.4672461508854207,0.0625,-1.0,0.875,15,1,14
+SST,30,0.09166666666666666,0.5116459803373835,0.0,-0.75,1.0,14,5,11
+PAR,30,0.008333333333333333,0.39382810300008264,0.0,-1.0,0.875,13,4,13
+EMP,30,0.05416666666666667,0.38096312459193554,0.125,-0.75,0.75,16,3,11
+overall_counselor_rating,30,-0.0125,0.37189809041614136,0.0,-1.0,0.625,14,6,10

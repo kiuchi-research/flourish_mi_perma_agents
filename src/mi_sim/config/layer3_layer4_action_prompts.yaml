@@ -1,0 +1,356 @@
+schema_version: 1
+description: >
+  Action prompt definitions for the Layer3 writer and Layer4 polishers.
+  Keeping the text in config keeps the code focused on orchestration.
+
+common_prompts:
+  task_section_template: |-
+    [Current task]
+    - Consider the full conversation, not just the latest turn.
+    - Avoid lecturing, pushing, or stating things too strongly.
+    - Focus on one proposition per turn and keep explanations tight.
+    - Offer advice, suggestions, or concrete plans only when PROVIDE_INFO is the main action.
+    - Do not use assistant-led wording such as "I will..." or "Let's..." when the action is meant to stay client-led.
+    - Keep control with the user; verify understanding only when needed.
+    - In REFLECT and other non-advice actions, mirror the user's experience in plain language and, for complex reflections, add at most one small implication.
+    {action_rule}
+  output_format_constraints: |-
+    [Output constraints]
+    - Keep sentences short; aim for at most two commas per sentence.
+    - Shorten by trimming unnecessary words and simplifying syntax, not by mechanically deleting punctuation.
+    - Do not evade comma limits by splitting excessively.
+    - Use plain language that a teenager can understand.
+    - Avoid jargon unless it is briefly explained.
+    - The response body should be natural English only. Avoid slang, romanization, placeholders, and broken ASCII tokens except proper nouns or common abbreviations.
+    - Check for unnatural phrasing before output: awkward deictics, repetitive wording, or verbose preambles.
+    - Prefer a final line that sounds natural in the flow of the conversation.
+
+session_evaluation_prompts:
+  client_feedback_prompt_template: |-
+    You are the client configured by CLIENT_CODE.
+    Immediately after the session, reflect on your experience and write exactly one paragraph in natural English.
+    Use both the ratings and the session log.
+    Target about 400 characters, roughly 320-480 characters.
+    Include:
+    - what the session felt like
+    - what was helpful
+    - what felt missing, and any remaining worry or hesitation
+    - how you might feel afterward and what you might try next
+    No bullets or headings. Put only the English body text into the JSON.
+
+    Return only this JSON shape:
+    {{
+      "client_feedback": "about 400 characters of English text"
+    }}
+
+    === CLIENT_CONTEXT ===
+    {client_context_json}
+
+    === RATINGS ===
+    {ratings_json}
+
+    === FINAL_CLIENT_INTERNAL_STATE ===
+    {final_client_internal_state_json}
+
+    === SESSION_LOG ===
+    {session_log_text}
+
+  supervisor_feedback_prompt_template: |-
+    You are an experienced motivational interviewing supervisor.
+    Review the session below and write one paragraph of feedback for the counselor in natural English.
+    Target about 400 characters, roughly 320-480 characters.
+    Include:
+    - what the counselor did well
+    - the main issues
+    - what to improve next time
+    Look closely at reflection, affirmation, focus, autonomy support, and evocation from an MI perspective.
+    No bullets or headings. Put only the English body text into the JSON.
+
+    Return only this JSON shape:
+    {{
+      "supervisor_feedback": "about 400 characters of English text"
+    }}
+
+    Use the full MI knowledge below as context. If it conflicts with the actual session, prefer the session log.
+
+    === MI_KNOWLEDGE ===
+    {mi_knowledge_text}
+
+    === RATINGS ===
+    {ratings_json}
+
+    === FINAL_CLIENT_INTERNAL_STATE ===
+    {final_client_internal_state_json}
+
+    === SESSION_LOG ===
+    {session_log_text}
+
+layer4_writer_prompts:
+  layer3_action_rule_section_template: |-
+    [Layer3 action rules]
+    - The rules below were fixed in Layer3. Keep the meaning and polish the final wording.
+    {action_rule}
+  minimal_mode_rules: |-
+    [Layer4 polishing mode]
+    - Use the Layer3 draft as the anchor and keep the fixed constraints and editor brief intact.
+    - Prefer making the response shorter and more natural over preserving every original phrase.
+    - Keep the main action and the direction of change talk intact.
+    - Preserve the meaning, topic, and structure of draft_response_text. Do not generate a separate alternative.
+    - draft_response_text is a meaning anchor, not a vocabulary anchor. Keep the meaning and main action, but allow the wording to move toward the user's wording or close everyday language.
+    - Do not change fixed_main_action.
+    - Follow fixed_affirm_mode and fixed_reflection_style.
+    - Do not change writer_plan. Respect the target sentence count and question limit.
+    - Do not re-decide primary_focus, utterance_target, evocation_move, must_include, or must_avoid.
+    - Keep edits to rewording, reducing redundancy, adjusting word order, punctuation, and natural sentence joining/splitting.
+    - Add or remove sentences only when needed to satisfy the action rules and writer plan.
+    - Do not add new topics, new suggestions, new questions, re-interpretations of the history, or new strength labels.
+    - If add_affirm is not NONE, do not delete affirmation itself. If you soften a strong trait label or abstract evaluation, compress it into a short affirmation tied to an observable utterance, choice, or action.
+    - Keep one or two functions at most; do not stack multiple functions in a single turn.
+    - When multiple candidates preserve the same action and change direction, choose the shorter, more natural, more everyday option.
+    - Remove abstract evaluation, repetition, and explanatory phrases before anything else.
+    - Do not rewrite the user as the speaker. Do not change ownership or perspective.
+    - If draft_response_text contains concrete details such as time, place, quantity, tools, or steps, keep them rather than generalizing them.
+    - Keep at least one concrete user detail when possible.
+    - If the user is clearly leaning one way in an A/B choice, keep that side in the foreground.
+    - Keep the specific change-talk focus even when shortening.
+    - Preserve the connection to the user's immediate wording and the conversation history.
+    - Do not add abstract closing nouns such as "method" or "flow" at the end.
+    - If a phrase sounds like counselor voice, move it back toward everyday client-language.
+    - Output only the response body. Do not emit JSON, headings, bullets, or role prefixes.
+  hard_constraints_template: |-
+    [Fixed constraints]
+    - phase: {phase_value} [{phase_name}]
+    - turn_index: {turn_index}
+    - fixed_main_action: {action_value}
+    - fixed_affirm_mode: {affirm_mode}
+    - fixed_reflection_style: {reflection_style}
+  editor_brief_template: |-
+    [Layer4 editor brief]
+    - last_user_text: {last_user_text}
+    - primary_focus.topic: {primary_focus_topic}
+    - primary_focus.meaning: {primary_focus_meaning}
+    - ct_anchors: {ct_anchors}
+    - ct_operation_goal: {ct_operation_goal}
+    - utterance_target: {utterance_target}
+    - question_reflect_seed: {question_reflect_seed}
+    - evocation_move: {evocation_move}
+    - macro_bridge_anchor: {macro_bridge_anchor}
+    - phase_goal_this_turn: {phase_goal_this_turn}
+    - writer_plan: {writer_plan}
+    - must_include: {must_include}
+    - must_avoid: {must_avoid}
+    - slot_goal: {slot_goal}
+    - repair_goal_text: {repair_goal_text}
+    - success_criterion: {success_criterion}
+    - clarify_preference_mode: {clarify_preference_mode}
+    - clarify_preference_options: {clarify_preference_options}
+    - slot_quality_target_examples.detail: {slot_quality_target_examples_detail}
+    - draft_response_text: {draft_response_text}
+    - layer4_repair_issue_codes.hard_contract: {layer4_repair_issue_codes_hard_contract}
+    - layer4_repair_issue_codes.soft_hint: {layer4_repair_issue_codes_soft_hint}
+    - Keep concrete details such as time, place, quantity, tools, and steps when possible.
+    - Treat slot_quality_target_examples.detail as a concrete anchor candidate.
+    - Resolve hard_contract first, then reflect soft_hint without breaking naturalness.
+    - Use the Layer3 brief as fixed input. Do not re-decide it in Layer4.
+    - Use the conversation history as context, but prioritize the immediate connection to the latest turn.
+    - draft_response_text is the meaning anchor. It is fine to move the wording closer to ordinary everyday language.
+    - Keep meaning, but do not leave unnatural mixed-language fragments in the final line.
+    - Use the brief as a reminder of what to preserve, but do not copy abstract labels into the final text.
+  edit_task: |-
+    [Edit task]
+    0. First priority: make the final text shorter and more natural. If unsure, cut rather than add.
+    1. Use draft_response_text as the anchor and resolve hard contracts first, then use soft hints as guidance.
+    2. Preserve the action, utterance target, and change-talk direction while aligning with the guardrails and affirmation rules.
+    3. Keep the meaning and structure, but reduce propositions through rewording, trimming redundancy, reordering, and sentence splitting/merging.
+    4. Keep the speaker's own words, the current direction, and both sides of any hesitation.
+    5. Avoid abstract nouns unless the user used them first.
+    6. Keep concrete anchors such as time, place, quantity, tools, and steps whenever that still sounds natural.
+    7. Keep the change-talk focus clear and do not replace it with a general statement.
+    8. Do not over-explain, do not add new topics, and do not add new questions.
+    9. Respect the user's explicit preference in last_user_text over the draft if they conflict.
+    10. Check for perspective flips, lost specifics, or over-abstraction before output.
+    11. Output only the final response body.
+  draft_length_contract_template: |-
+    [Draft length contract]
+    - draft_status: {draft_status}
+    - draft_length_cap_chars: {draft_length_cap_chars}
+    - If draft_response_text exists, keep the meaning but make the final line shorter.
+    - If unsure, remove rather than add.
+    - If draft_response_text is missing, rebuild the shortest natural response possible from utterance_target, evocation_move, and must_include.
+  validation_checks:
+    header: "[Pre-output checks]"
+    common: |-
+      - Output only the response body. Do not output JSON, role labels, or code blocks.
+      - Do not emit internal labels or snake_case identifiers.
+      - Write in ordinary everyday English and do not overdo formality.
+      - The response body should be English only, except for proper nouns and common abbreviations.
+      - Avoid counseling clichés and generic meta-evaluation.
+      - Do not complete value judgments or future predictions that the user did not state.
+      - Keep the sentence count short and the comma count low.
+      - Remove unnecessary words instead of mechanically deleting punctuation.
+      - Avoid "I will...", "let's...", "you should...", or similarly assistant-led phrasing when the action is not meant to be directive.
+      - Do not add new topics that drift away from the Layer3 draft.
+      - Keep the user's autonomy markers intact.
+      - Keep concrete details and do not generalize them away.
+      - Keep at least one concrete user detail when possible.
+      - Keep the specific change-talk focus.
+      - Do not over-abstract. Prefer everyday words over labels.
+      - If the line gets too abstract, move back toward a scene, feeling, action, or choice.
+      - Do not end with a bare abstract noun such as "method" or "flow".
+      - Make sure the final line still sounds like the same conversation.
+    reflect_closing: |-
+      - Follow the Layer3 reflection structure and do not add extra parts in Layer4.
+    reflect_non_closing: |-
+      - Follow the Layer3 reflection structure and do not add extra parts in Layer4.
+    reflect_common: |-
+      - Follow the Layer3 reflection structure and do not add extra parts in Layer4.
+      - Vary the ending phrase so it does not become repetitive.
+    question_allow_questionless: |-
+      - Follow the Layer3 question structure and do not add extra parts in Layer4.
+    question_general: |-
+      - Follow the Layer3 question structure and do not add extra parts in Layer4.
+    question_target: |-
+      - Follow the Layer3 question structure and do not add extra parts in Layer4.
+    question_followup_intro: |-
+      - Follow the Layer3 question structure and do not add extra parts in Layer4.
+    question_followup_plus_one_template: |-
+      - Follow the Layer3 question structure and do not add extra parts in Layer4.
+    question_followup_reason_template: |-
+      - Follow the Layer3 question structure and do not add extra parts in Layer4.
+    question_followup_default: |-
+      - Follow the Layer3 question structure and do not add extra parts in Layer4.
+    scaling_question: |-
+      - Keep the scaling target concrete and tied to the immediate behavior, not an abstract label.
+    review_first_turn: |-
+      - Follow the Layer3 review-reflection structure and do not add extra parts in Layer4.
+      - Open with everyday language such as "what still stands out" or "what you want to keep in mind next."
+    summary: |-
+      - Follow the Layer3 summary structure and do not add extra parts in Layer4.
+    closing_final_turn: |-
+      - Do not ask a question in the final closing turn.
+      - Include one clear closing statement.
+    clarify_preference: |-
+      - Follow the Layer3 clarify-preference structure and do not add extra parts in Layer4.
+    clarify_preference_focus_choice: |-
+      - Keep the choice centered on which topic to start with, not on process preference.
+    ask_permission: |-
+      - Follow the Layer3 permission structure and do not add extra parts in Layer4.
+      - If add_affirm is not NONE, use one short affirmation plus one permission question.
+      - If add_affirm is NONE, use one short reflection seed plus one permission question.
+      - Keep only one question at the end.
+    provide_info: |-
+      - Follow the Layer3 provide-info structure and do not add extra parts in Layer4.
+    affirm_none: |-
+      - Use the action only; do not include an affirmation sentence.
+      - Avoid stock praise words such as excellent, great, effort, or trying hard.
+    affirm_simple: |-
+      - Use one short affirmation sentence plus the fixed main action.
+      - Ground the affirmation in one observable utterance, choice, or action.
+      - Keep the wording varied and natural.
+    affirm_complex: |-
+      - Use one context-grounded affirmation sentence plus the fixed main action.
+      - Start from an observable fact.
+      - Add one short clause that points to the direction or value behind that fact.
+      - Prefer action-based affirmation over abstract trait labels.
+      - Avoid subjective meta-evaluation and keep the wording grounded in the speaker's own action.
+  action_guardrails:
+    closing_reflect_template: |-
+      [Layer3-aligned guardrails]
+      - Keep the Layer3 closing structure and do not add extra parts in Layer4.
+      - Do not break the main action.
+      {style_line}
+    closing_final_turn: |-
+      [Layer3-aligned guardrails]
+      - Keep the Layer3 final closing structure and do not add extra parts in Layer4.
+      - Do not ask a question.
+      - Do not break the main action.
+    reflect_template: |-
+      [Layer3-aligned guardrails]
+      - Keep the Layer3 reflection structure and do not add extra parts in Layer4.
+      - Do not break the main action.
+      {style_line}
+    question_followup_plus_one_template: |-
+      [Layer3-aligned guardrails]
+      - Keep the Layer3 question structure and do not add extra parts in Layer4.
+      - Do not break the main action.
+    question_followup_reason_template: |-
+      [Layer3-aligned guardrails]
+      - Keep the Layer3 question structure and do not add extra parts in Layer4.
+      - Do not break the main action.
+    question_followup_default: |-
+      [Layer3-aligned guardrails]
+      - Keep the Layer3 question structure and do not add extra parts in Layer4.
+      - Do not break the main action.
+    question_default: |-
+      [Layer3-aligned guardrails]
+      - Keep the Layer3 question structure and do not add extra parts in Layer4.
+      - If fixed_affirm_mode is not NONE, use one affirmation sentence plus one question sentence.
+      - If fixed_affirm_mode is NONE, use one reflection seed sentence plus one question sentence.
+      - Keep only one question at the end.
+      - Do not break the main action.
+    scaling_question: |-
+      [Layer3-aligned guardrails]
+      - Keep the Layer3 scaling question structure and do not add extra parts in Layer4.
+      - Do not break the main action.
+    summary: |-
+      [Layer3-aligned guardrails]
+      - Keep the Layer3 summary structure and do not add extra parts in Layer4.
+      - Do not break the main action.
+    clarify_preference: |-
+      [Layer3-aligned guardrails]
+      - Keep the Layer3 clarify-preference structure and do not add extra parts in Layer4.
+      - Do not break the main action.
+      - If one option is already favored, keep that side visible first.
+    clarify_preference_focus_choice: |-
+      - Present the topic choices in a short, concrete way so the user can choose where to start.
+    ask_permission: |-
+      [Layer3-aligned guardrails]
+      - Keep the Layer3 permission structure and do not add extra parts in Layer4.
+      - Do not break the main action.
+    provide_info: |-
+      [Layer3-aligned guardrails]
+      - Keep the Layer3 provide-info structure and do not add extra parts in Layer4.
+      - Do not break the main action.
+    unknown: |-
+      [Main action guardrail]
+      - Output only the response body in the format required by the current main action.
+  affirmation_rules:
+    none: |-
+      [Affirmation]
+      - Use the action only; do not include an affirmation sentence.
+      - Avoid stock praise language such as excellent, great, effort, or trying hard.
+    simple: |-
+      [Affirmation: SIMPLE]
+      - Use one short affirmation sentence plus the fixed main action.
+      - Ground it in one observable utterance, choice, or action.
+      - Keep the wording natural and varied.
+      - For QUESTION or ASK_PERMISSION_TO_SHARE_INFO, place one question at the end.
+    complex: |-
+      [Affirmation: COMPLEX]
+      - Use one context-grounded affirmation sentence plus the fixed main action.
+      - Start from an observable fact.
+      - Add one short clause that points to the direction or value behind that fact.
+      - Prefer action-based affirmation over abstract trait labels.
+      - For QUESTION or ASK_PERMISSION_TO_SHARE_INFO, place one question at the end.
+  issue_repair:
+    header: "[Layer3 rule violation repair guide]"
+    intro_line: "- Fix the violation matching the code below first. Do not add unrelated fixes."
+    fallback_ask_permission: "- Keep ASK_PERMISSION as one affirmation or reflection sentence plus one permission question."
+    fallback_reflect: "- Keep REFLECT actions free of questions, suggestions, or choice pressure."
+    fallback_question_like: "- Keep question actions to one question and avoid mixed question forms."
+    fallback_summary: "- Make SUMMARY match the Layer3 action rules for sentence count, structure, and ending."
+    guidance:
+      ask_permission_not_single_sentence: "- ask_permission_not_single_sentence: Rewrite it into two sentences: one affirmation or reflection sentence plus one permission question."
+      ask_permission_not_question: "- ask_permission_not_question: Rewrite it as a yes/no or permission question."
+      ask_permission_missing_keyword: "- ask_permission_missing_keyword: Include one of information, sharing, suggestion, method, or options."
+      scale_followup_question_missing_plus_one_probe: "- scale_followup_question_missing_plus_one_probe: Keep the scale at 0-10 and ask only what would move it one point higher. Do not mix in a reason question."
+      reflect_contains_choice_prompt: "- reflect_contains_choice_prompt: Replace choice-pressuring wording with wording such as one side, both sides, or at the same time."
+      reflect_contains_question_mark: "- reflect_contains_question_mark: Remove the question mark and rewrite it as a reflection statement."
+      reflect_ending_repetition: "- reflect_ending_repetition: Vary the ending phrase so the same ending does not repeat."
+      reflect_ending_family_bias: "- reflect_ending_family_bias: Avoid repeating the same ending family as the previous assistant turn."
+      reflect_missing_change_talk_focus: "- reflect_missing_change_talk_focus: Put one clear change direction back into the reflection."
+      question_missing_target_focus: "- question_missing_target_focus: Ask about the current target focus rather than a side topic."
+      question_too_many_questions: "- question_too_many_questions: Reduce it to one question."
+      question_needs_context: "- question_needs_context: Add a short reflection or setup sentence before the question."
+      summary_too_long: "- summary_too_long: Shorten the summary and keep only the key points."
+      summary_missing_close: "- summary_missing_close: Add a brief closing statement that sounds like the end of the session."

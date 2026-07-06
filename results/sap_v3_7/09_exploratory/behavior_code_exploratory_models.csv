@@ -1,0 +1,7 @@
+"summary","n","engine","interaction_p_value","model_status","poisson_aic","negbin_aic"
+"Q",30,"poisson_primary",0.956113535464609,"ok_or_warning",161.605050898624,163.605272352695
+"total_reflection",30,"poisson_primary",0.935003761230717,"ok_or_warning",186.454599348895,188.454939290881
+"pct_complex_reflection",30,"lm_supplement",0.000718227337460455,"ok_or_warning",NA,NA
+"reflection_question_ratio",30,"lm_supplement",0.0501703092320752,"ok_or_warning",NA,NA
+"Total_MI_Adherent",30,"poisson_primary",0.968965050780731,"ok_or_warning",168.354057493816,170.354311987758
+"Total_MI_Non_Adherent",30,"poisson_primary",1,"ok_or_warning",30.0000000002265,NA

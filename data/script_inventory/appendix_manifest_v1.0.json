@@ -1,0 +1,22 @@
+{
+  "sap_version": "v1.3",
+  "appendix_version": "v1.0",
+  "generated_at_utc": "2026-05-08T06:45:32.690181+00:00",
+  "files": [
+    {
+      "path": "SAP/appendices/v1.3/analysis_script_list_v1.0.csv",
+      "bytes": 8101,
+      "sha256": "432d9535761fe524ba539d3d2b1c1c37f7731aeea2e9c48d16472ec241e44769"
+    },
+    {
+      "path": "SAP/appendices/v1.3/behavior_coding_rules_v1.0.md",
+      "bytes": 3613,
+      "sha256": "847ec00ce0a7aae4a52c3709d76f834a445f1feb4378883e16fbbb2523ba79a7"
+    },
+    {
+      "path": "SAP/appendices/v1.3/data_dictionary_v1.0.csv",
+      "bytes": 6790,
+      "sha256": "c44aa127efe156b488fa66163a878cf53d497fca85251bcba78d56de4f08af60"
+    }
+  ]
+}

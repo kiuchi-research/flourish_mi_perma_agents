@@ -1,0 +1,12 @@
+{
+  "started": "2026-06-06T10:48:46",
+  "completed": "2026-06-06T10:55:28",
+  "duration_seconds": 401.753716,
+  "input": "nonpublic source workbook",
+  "results_dir": "results/sap_v3_7",
+  "n_scripts": 60,
+  "n_pairs": 30,
+  "n_global_rows": 1200,
+  "n_client_rows": 240,
+  "n_behavior_pairs": 30
+}

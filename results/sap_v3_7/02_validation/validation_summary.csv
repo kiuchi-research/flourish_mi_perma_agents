@@ -1,0 +1,12 @@
+﻿check,passed,detail
+script_id_count,True,60
+pair_id_count,True,30
+each_pair_has_layer3_layer4,True,violations=0
+global_rating_rows,True,1200
+global_rating_range,True,1.0-5.0
+global_rating_half_steps,True,0.5-step values
+client_naturalness_rows,True,240
+client_naturalness_range,True,1-10
+behavior_pair_rows,True,30
+behavior_nonnegative_integer,True,nonnegative integers
+presentation_order_large_imbalance,True,max_within=9.267; overall_diff=2.150

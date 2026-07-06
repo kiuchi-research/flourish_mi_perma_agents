@@ -1,0 +1,11 @@
+"outcome","effect","n","p_value","model_status","warnings","holm_p_within_effect"
+"CCT","situation",240,0.275209664319141,"ok_or_warning","",1
+"CCT","perma_profile",240,0.61648088021455,"ok_or_warning","",1
+"SST","situation",240,0.367166739539982,"ok_or_warning","",1
+"SST","perma_profile",240,0.499000760189536,"ok_or_warning","",1
+"PAR","situation",240,0.0198643255367363,"ok_or_warning","",0.0993216276836817
+"PAR","perma_profile",240,0.129738502422796,"ok_or_warning","",0.648692512113981
+"EMP","situation",240,0.509333027026434,"ok_or_warning","",1
+"EMP","perma_profile",240,0.479454426999115,"ok_or_warning","",1
+"overall_counselor_rating","situation",240,0.798938329999699,"ok_or_warning","",1
+"overall_counselor_rating","perma_profile",240,0.905178519005522,"ok_or_warning","",1

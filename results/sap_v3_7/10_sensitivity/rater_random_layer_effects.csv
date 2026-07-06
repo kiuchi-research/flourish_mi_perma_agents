@@ -1,0 +1,6 @@
+"analysis","outcome","n","beta","OR","CI_low","CI_high","CI_method","p_value","model_status","warnings","holm_p"
+"rater_random_sensitivity","CCT",240,0.236726448847853,1.26709445521437,0.605598477798428,2.6511433190382,"profile_likelihood",0.531421013111695,"ok","",1
+"rater_random_sensitivity","SST",240,0.560030113027192,1.75072521913846,0.705549767809815,4.34418510609393,"profile_likelihood",0.230660558348148,"ok","",1
+"rater_random_sensitivity","PAR",240,0.104380739887659,1.11002300450377,0.62780840633652,1.96262276530766,"profile_likelihood",0.720410570869275,"ok","",1
+"rater_random_sensitivity","EMP",240,0.341164629625842,1.4065847873292,0.769084465357211,2.57251427257341,"profile_likelihood",0.272565390266731,"ok","",1
+"rater_random_sensitivity","overall_counselor_rating",240,-0.0277233752442226,0.972657390703354,0.547041513096571,1.72941609921813,"profile_likelihood",0.924756543952304,"ok","",1
