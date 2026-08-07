@@ -2362,7 +2362,7 @@ The three PERMA-profile levels are fixed directly in Appendix C of this SAP as f
 Level | Name | Description
 P1 | Languishers | Condition in which all PERMA domains are low
 P2 | Social hedonics | Condition in which Positive Emotion and Relationships are relatively high, while Engagement, Meaning, and Accomplishment are low
-P3 | Unsocial eudemonics | Condition in which Engagement, Meaning, and Accomplishment are relatively high, while Positive Emotion and Relationships are low
+P3 | Unsocial eudaimonics | Condition in which Engagement, Meaning, and Accomplishment are relatively high, while Positive Emotion and Relationships are low
 ```
 
 These three PERMA profiles are not established latent profile classes from prior research. They are operational and heuristic classifications used to express differences across PERMA domains. Auxiliary settings such as interpersonal style are background settings intended to create natural differences in responses across life situation × PERMA conditions, and they are not treated as independent experimental factors.

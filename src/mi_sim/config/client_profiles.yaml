@@ -64,8 +64,8 @@ definitions:
       R: 7.2
       M: 4.8
       A: 6.4
-    unsocial_eudemonics:
-      label: Unsocial eudemonics
+    unsocial_eudaimonics:
+      label: Unsocial eudaimonics
       description: A group with somewhat high engagement, meaning, and accomplishment, but lower positive emotion and relationships. They can focus, keep moving toward goals, and work hard with purpose, while enjoyment and relational fulfillment are relatively weak.
       P: 4.9
       E: 5.9
@@ -270,7 +270,7 @@ clients:
       - Interpersonal resources make the distress less visible
       - Reactive coordination is increasing while deep work and a sense of progress are getting lost
   UNSOCIAL_MGR:
-    pattern: unsocial_eudemonics
+    pattern: unsocial_eudaimonics
     interpersonal_style: S2
     background:
       age_range: 50s
@@ -564,7 +564,7 @@ clients:
       - Because of that, deeper future issues tend to be postponed
       - Anxiety and self-blame are likely to reappear at night or when alone
   UNSOCIAL_LOWINC:
-    pattern: unsocial_eudemonics
+    pattern: unsocial_eudaimonics
     interpersonal_style: S2
     background:
       age_range: 47s
@@ -861,7 +861,7 @@ clients:
       - The problem is spoken in practical terms rather than as loneliness
 
   UNSOCIAL_ISO:
-    pattern: unsocial_eudemonics
+    pattern: unsocial_eudaimonics
     interpersonal_style: S2
     background:
       age_range: 54s
@@ -1158,7 +1158,7 @@ clients:
       - Short-term recovery exists, but long-term meaning and accomplishment are insufficient
 
   UNSOCIAL_STABLE:
-    pattern: unsocial_eudemonics
+    pattern: unsocial_eudaimonics
     interpersonal_style: S2
     background:
       age_range: 46s
@@ -1455,7 +1455,7 @@ clients:
       - He needs to connect interpersonal recovery with longer-term meaning and accomplishment
 
   UNSOCIAL_MOB:
-    pattern: unsocial_eudemonics
+    pattern: unsocial_eudaimonics
     interpersonal_style: S2
     background:
       age_range: 49s

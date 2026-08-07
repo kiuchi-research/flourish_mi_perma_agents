@@ -58,7 +58,7 @@ PRIOR_REFERENCES = {
 PERMA_MAP = {
     "LANG": ("P1", "Languishers"),
     "SOCIAL": ("P2", "Social hedonics"),
-    "UNSOCIAL": ("P3", "Unsocial eudemonics"),
+    "UNSOCIAL": ("P3", "Unsocial eudaimonics"),
 }
 
 SITUATION_MAP = {

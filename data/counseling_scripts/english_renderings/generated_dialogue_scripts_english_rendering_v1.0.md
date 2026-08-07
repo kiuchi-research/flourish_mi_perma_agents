@@ -2500,7 +2500,7 @@ Index     Speaker         Text
 
 
 
-1.3     Unsocial Eudemonics
+1.3     Unsocial Eudaimonics
 
 1.3.1     Layer 3 Draft
 
@@ -6581,7 +6581,7 @@ Index     Speaker         Text
 
 
 
-2.3     Unsocial Eudemonics
+2.3     Unsocial Eudaimonics
 
 2.3.1     Layer 3 Draft
 
@@ -10454,7 +10454,7 @@ Index     Speaker         Text
 
 
 
-3.3     Unsocial Eudemonics
+3.3     Unsocial Eudaimonics
 
 3.3.1     Layer 3 Draft
 
@@ -14093,7 +14093,7 @@ Index     Speaker         Text
 
 
 
-4.3     Unsocial Eudemonics
+4.3     Unsocial Eudaimonics
 
 4.3.1     Layer 3 Draft
 
@@ -18061,7 +18061,7 @@ Index     Speaker         Text
 
 
 
-5.3     Unsocial Eudemonics
+5.3     Unsocial Eudaimonics
 
 5.3.1     Layer 3 Draft
 
